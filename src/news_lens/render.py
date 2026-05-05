@@ -31,6 +31,7 @@ from .models import (
     HeadlineFraming,
     LoadedTerm,
     OutletCoverage,
+    SyndicationGroup,
     TieredClaim,
 )
 
@@ -204,6 +205,17 @@ section h2 {
   color: var(--text-subtle);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+.article .syndication-badge {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  background: #eef2ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-weight: 500;
 }
 .article a {
   color: inherit;
@@ -556,17 +568,49 @@ def _grid_template(n_outlets: int) -> str:
     return f"grid-template-columns: 1fr repeat({n_outlets}, 60px);"
 
 
-def _render_articles(articles: list[Article], outlet_order: list[str]) -> str:
+def _syndication_partners(
+    article: Article,
+    syndication_groups: list[SyndicationGroup],
+    articles_by_id: dict[str, Article],
+) -> list[str]:
+    """Return outlet domains of articles syndicated with `article` (excluding itself)."""
+    for group in syndication_groups:
+        if article.id in group.article_ids:
+            return [
+                articles_by_id[aid].outlet_domain
+                for aid in group.article_ids
+                if aid != article.id and aid in articles_by_id
+            ]
+    return []
+
+
+def _render_articles(
+    articles: list[Article],
+    outlet_order: list[str],
+    syndication_groups: list[SyndicationGroup],
+) -> str:
     by_outlet = {a.outlet_domain: a for a in articles}
+    articles_by_id = {a.id: a for a in articles}
     rows = []
     for outlet in outlet_order:
         a = by_outlet[outlet]
         date = a.published_at.date().isoformat() if a.published_at else "—"
         title = a.title or a.url
+        partners = _syndication_partners(a, syndication_groups, articles_by_id)
+        title_block = (
+            f'<a href="{_esc(a.url)}" target="_blank" rel="noopener">{_esc(title)}</a>'
+        )
+        if partners:
+            partners_str = ", ".join(_esc(p) for p in partners)
+            title_block += (
+                f'<br><span class="syndication-badge">'
+                f"Syndicated copy — overlaps with {partners_str}"
+                f"</span>"
+            )
         rows.append(
             f'<div class="article">'
             f'<div class="outlet">{_esc(outlet)}</div>'
-            f'<div class="title"><a href="{_esc(a.url)}" target="_blank" rel="noopener">{_esc(title)}</a></div>'
+            f'<div class="title">{title_block}</div>'
             f'<div class="date">{_esc(date)}</div>'
             f"</div>"
         )
@@ -883,17 +927,27 @@ def render_html(matrix: CoverageMatrix) -> str:
             "</section>"
         )
 
+    n_voices = n_articles - sum(
+        len(g.article_ids) - 1 for g in matrix.syndication_groups
+    )
+    voices_part = (
+        f" · {n_voices} independent voice{'' if n_voices == 1 else 's'}"
+        if n_voices != n_articles
+        else ""
+    )
+
     body = (
         '<header class="site">'
         "<h1>News Lens — Coverage Matrix</h1>"
         f'<div class="meta">{n_articles} article{"" if n_articles == 1 else "s"}'
         f' · {n_outlets} outlet{"" if n_outlets == 1 else "s"}'
+        f"{voices_part}"
         f' · {n_claims} canonical claim{"" if n_claims == 1 else "s"}'
         f" · generated {_esc(generated)}</div>"
         "</header>"
         "<section>"
         "<h2>Articles</h2>"
-        f"{_render_articles(matrix.articles, outlet_order)}"
+        f"{_render_articles(matrix.articles, outlet_order, matrix.syndication_groups)}"
         "</section>"
         "<section>"
         "<h2>Coverage Matrix</h2>"

@@ -167,9 +167,24 @@ class ArticleLens(BaseModel):
     signals: LensSignals
 
 
+class SyndicationGroup(BaseModel):
+    """A set of articles whose body text overlaps substantially.
+
+    Wire-service syndication (AP, Reuters, AFP) means three outlets running
+    the same copy aren't three independent assertions. Surface the
+    relationship so consumers don't read inflated consensus.
+    """
+
+    article_ids: List[str]
+    similarity: float = Field(
+        description="Minimum pairwise Jaccard similarity within the group, 0..1."
+    )
+
+
 class CoverageMatrix(BaseModel):
-    """End-to-end pipeline output: articles, tiered claims, and per-outlet lens."""
+    """End-to-end pipeline output: articles, tiered claims, lens, syndication."""
 
     articles: List[Article]
     claims: List[TieredClaim]
     lenses: List[ArticleLens] = Field(default_factory=list)
+    syndication_groups: List[SyndicationGroup] = Field(default_factory=list)

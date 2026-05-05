@@ -8,41 +8,52 @@
       "byline": "Reporter Name",
       "published_at": "2026-05-04T16:30:00Z",
       "fetched_at": "2026-05-04T16:30:00Z",
-      "body": "(synthetic body)",
-      "paragraph_count": 18
+      "body": "The President signed Executive Order 14123 at a Rose Garden ceremony on Saturday afternoon, capping months of internal debate over the legal scope of executive authority on border policy.\n\nThe order takes effect immediately and directs federal agencies to expedite removal proceedings while expanding asylum-screening criteria, according to the text released by the White House counsel's office.\n\nAn estimated 5 million people are expected to be affected by the new policy, administration officials said.\n\nSeveral legal scholars said the order exceeded the executive branch's authority and was likely to face immediate legal challenge in the courts.\n\n\"This is an unconstitutional overreach by an executive branch operating without congressional authority,\" the American Civil Liberties Union said in a statement released hours after the signing.\n\nThe order's sweeping language drew sharp pushback from immigration advocates and from members of the President's own party.\n\nA senior aide to the president resigned Saturday afternoon in protest of the order, according to two people familiar with the matter who spoke on condition of anonymity.\n\nThe resignation, which had not been previously reported, marked the first public break within the administration over the policy.\n\nLawmakers on both sides of the aisle said they expected the order to be challenged in federal court within days.",
+      "paragraph_count": 9
     },
     {
       "id": "wsj",
-      "url": "https://wsj.com/2026/05/04/border-order",
+      "url": "https://wsj.com/articles/border-order",
       "outlet_domain": "wsj.com",
       "title": "Border Executive Order Takes Effect; Markets Mixed",
       "byline": "Reporter Name",
       "published_at": "2026-05-04T16:30:00Z",
       "fetched_at": "2026-05-04T16:30:00Z",
-      "body": "(synthetic body)",
-      "paragraph_count": 14
+      "body": "The President signed an executive order Saturday at the White House, taking effect immediately and reshaping how federal agencies process border claims.\n\nMarkets reacted with a muted decline, as analysts focused on the order's labor-market implications and the short-term costs to companies in agriculture and construction.\n\nAdministration officials said the policy would directly affect roughly 1.2 million people, a figure significantly lower than estimates circulated by some advocacy groups.\n\nWall Street analysts noted that the order's enforcement provisions could affect quarterly hiring patterns in low-wage industries.\n\nDemocratic lawmakers vowed to challenge the order in court, calling it an unconstitutional overreach.\n\nA senior Republican on the Judiciary Committee said the order was a long-overdue corrective and predicted it would survive legal challenges.\n\nThe S&P 500 closed down 0.4 percent, with construction and agricultural-services stocks leading the decline.",
+      "paragraph_count": 7
     },
     {
       "id": "reut",
-      "url": "https://reuters.com/2026/05/04/border-order",
+      "url": "https://reuters.com/world/us/border-order",
       "outlet_domain": "reuters.com",
       "title": "U.S. President Signs Border Executive Order",
-      "byline": "Reporter Name",
+      "byline": "Reuters Staff",
       "published_at": "2026-05-04T16:30:00Z",
       "fetched_at": "2026-05-04T16:30:00Z",
-      "body": "(synthetic body)",
-      "paragraph_count": 9
+      "body": "U.S. President signed an executive order on border policy on Saturday, the White House said in a statement.\n\nThe order takes effect immediately, the White House said.\n\nA senior administration official, speaking on condition of anonymity, said the policy could affect up to 5 million people.\n\nThe official did not provide a precise estimate, citing the difficulty of projecting how the new screening criteria would apply.\n\nThe American Civil Liberties Union called the order unconstitutional in a statement on Saturday, vowing to file suit in federal court next week.\n\nThe order is the latest in a series of executive actions on immigration policy issued by the administration this year.",
+      "paragraph_count": 6
+    },
+    {
+      "id": "abc",
+      "url": "https://abcnews.go.com/politics/border-order",
+      "outlet_domain": "abcnews.go.com",
+      "title": "U.S. President Signs Border Order, White House Says",
+      "byline": "ABC News",
+      "published_at": "2026-05-04T16:30:00Z",
+      "fetched_at": "2026-05-04T16:30:00Z",
+      "body": "ABC News is running the following report from the Reuters wire on the executive order.\n\nU.S. President signed an executive order on border policy on Saturday, the White House said in a statement.\n\nThe order takes effect immediately, the White House said.\n\nA senior administration official, speaking on condition of anonymity, said the policy could affect up to 5 million people.\n\nThe official did not provide a precise estimate, citing the difficulty of projecting how the new screening criteria would apply.\n\nThe American Civil Liberties Union called the order unconstitutional in a statement on Saturday, vowing to file suit in federal court next week.\n\nThe order is the latest in a series of executive actions on immigration policy issued by the administration this year.",
+      "paragraph_count": 7
     },
     {
       "id": "fox",
-      "url": "https://foxnews.com/2026/05/04/border-order",
+      "url": "https://foxnews.com/politics/border-order",
       "outlet_domain": "foxnews.com",
       "title": "President Acts to Secure the Border with Bold Executive Order",
       "byline": "Reporter Name",
       "published_at": "2026-05-04T16:30:00Z",
       "fetched_at": "2026-05-04T16:30:00Z",
-      "body": "(synthetic body)",
-      "paragraph_count": 16
+      "body": "The President took bold action Saturday, signing a new executive order to secure the southern border and crack down on illegal crossings.\n\nThe order takes effect immediately, the White House said, and is the most sweeping border-enforcement directive in years.\n\nThe President was joined by Border Patrol union leaders at the signing ceremony.\n\nThe new directive prioritizes detention capacity for repeat crossers and authorizes additional detention facilities along the southern border.\n\nA Border Patrol union official praised the order as a long-needed restoration of the rule of law.\n\nThe order delivers on a campaign promise to take decisive action on what the President has called a national-security emergency at the border.",
+      "paragraph_count": 6
     }
   ],
   "claims": [
@@ -54,7 +65,7 @@
           "outlet_domain": "nytimes.com",
           "article_id": "nyt",
           "status": "asserted",
-          "source_quote": "The President signed Executive Order 14123 at a Rose Garden ceremony on Saturday.",
+          "source_quote": "The President signed Executive Order 14123 at a Rose Garden ceremony on Saturday afternoon, capping months of internal debate over the legal scope of executive authority on border policy.",
           "attributed_to": null,
           "position": 1
         },
@@ -62,7 +73,7 @@
           "outlet_domain": "wsj.com",
           "article_id": "wsj",
           "status": "asserted",
-          "source_quote": "President signed an executive order Saturday at the White House, taking effect immediately.",
+          "source_quote": "The President signed an executive order Saturday at the White House, taking effect immediately and reshaping how federal agencies process border claims.",
           "attributed_to": null,
           "position": 1
         },
@@ -70,15 +81,23 @@
           "outlet_domain": "reuters.com",
           "article_id": "reut",
           "status": "asserted",
-          "source_quote": "U.S. President signed an executive order on border policy on Saturday, the White House said.",
+          "source_quote": "U.S. President signed an executive order on border policy on Saturday, the White House said in a statement.",
           "attributed_to": null,
           "position": 1
+        },
+        {
+          "outlet_domain": "abcnews.go.com",
+          "article_id": "abc",
+          "status": "asserted",
+          "source_quote": "U.S. President signed an executive order on border policy on Saturday, the White House said in a statement.",
+          "attributed_to": null,
+          "position": 2
         },
         {
           "outlet_domain": "foxnews.com",
           "article_id": "fox",
           "status": "asserted",
-          "source_quote": "The President took bold action Saturday, signing a new executive order to secure the southern border.",
+          "source_quote": "The President took bold action Saturday, signing a new executive order to secure the southern border and crack down on illegal crossings.",
           "attributed_to": null,
           "position": 1
         }
@@ -92,33 +111,41 @@
           "outlet_domain": "nytimes.com",
           "article_id": "nyt",
           "status": "asserted",
-          "source_quote": "The order is effective immediately, according to the text released by the White House counsel's office.",
+          "source_quote": "The order takes effect immediately and directs federal agencies to expedite removal proceedings while expanding asylum-screening criteria, according to the text released by the White House counsel's office.",
           "attributed_to": null,
-          "position": 3
+          "position": 2
         },
         {
           "outlet_domain": "wsj.com",
           "article_id": "wsj",
           "status": "asserted",
-          "source_quote": "President signed an executive order Saturday at the White House, taking effect immediately.",
+          "source_quote": "The President signed an executive order Saturday at the White House, taking effect immediately and reshaping how federal agencies process border claims.",
           "attributed_to": null,
           "position": 1
         },
         {
-          "outlet_domain": "foxnews.com",
-          "article_id": "fox",
+          "outlet_domain": "reuters.com",
+          "article_id": "reut",
           "status": "asserted",
           "source_quote": "The order takes effect immediately, the White House said.",
           "attributed_to": null,
           "position": 2
         },
         {
-          "outlet_domain": "reuters.com",
-          "article_id": "reut",
-          "status": "omitted",
-          "source_quote": null,
+          "outlet_domain": "abcnews.go.com",
+          "article_id": "abc",
+          "status": "asserted",
+          "source_quote": "The order takes effect immediately, the White House said.",
           "attributed_to": null,
-          "position": null
+          "position": 3
+        },
+        {
+          "outlet_domain": "foxnews.com",
+          "article_id": "fox",
+          "status": "asserted",
+          "source_quote": "The order takes effect immediately, the White House said, and is the most sweeping border-enforcement directive in years.",
+          "attributed_to": null,
+          "position": 2
         }
       ]
     },
@@ -130,23 +157,31 @@
           "outlet_domain": "nytimes.com",
           "article_id": "nyt",
           "status": "asserted",
-          "source_quote": "An estimated 5 million people are expected to be affected by the new policy.",
+          "source_quote": "An estimated 5 million people are expected to be affected by the new policy, administration officials said.",
           "attributed_to": null,
-          "position": 4
+          "position": 3
         },
         {
           "outlet_domain": "wsj.com",
           "article_id": "wsj",
           "status": "contradicted",
-          "source_quote": "Administration officials said the policy would directly affect roughly 1.2 million people.",
+          "source_quote": "Administration officials said the policy would directly affect roughly 1.2 million people, a figure significantly lower than estimates circulated by some advocacy groups.",
           "attributed_to": null,
-          "position": 5
+          "position": 3
         },
         {
           "outlet_domain": "reuters.com",
           "article_id": "reut",
           "status": "attributed",
-          "source_quote": "A senior administration official said the policy could affect up to 5 million people.",
+          "source_quote": "A senior administration official, speaking on condition of anonymity, said the policy could affect up to 5 million people.",
+          "attributed_to": "senior administration official",
+          "position": 3
+        },
+        {
+          "outlet_domain": "abcnews.go.com",
+          "article_id": "abc",
+          "status": "attributed",
+          "source_quote": "A senior administration official, speaking on condition of anonymity, said the policy could affect up to 5 million people.",
           "attributed_to": "senior administration official",
           "position": 4
         },
@@ -168,17 +203,9 @@
           "outlet_domain": "nytimes.com",
           "article_id": "nyt",
           "status": "attributed",
-          "source_quote": "Several legal scholars said the order exceeded the executive branch's authority and was likely to face immediate legal challenge.",
-          "attributed_to": "legal scholars",
-          "position": 6
-        },
-        {
-          "outlet_domain": "reuters.com",
-          "article_id": "reut",
-          "status": "attributed",
-          "source_quote": "The American Civil Liberties Union called the order unconstitutional in a statement on Saturday.",
+          "source_quote": "\"This is an unconstitutional overreach by an executive branch operating without congressional authority,\" the American Civil Liberties Union said in a statement released hours after the signing.",
           "attributed_to": "American Civil Liberties Union",
-          "position": 6
+          "position": 5
         },
         {
           "outlet_domain": "wsj.com",
@@ -186,7 +213,23 @@
           "status": "attributed",
           "source_quote": "Democratic lawmakers vowed to challenge the order in court, calling it an unconstitutional overreach.",
           "attributed_to": "Democratic lawmakers",
-          "position": 11
+          "position": 5
+        },
+        {
+          "outlet_domain": "reuters.com",
+          "article_id": "reut",
+          "status": "attributed",
+          "source_quote": "The American Civil Liberties Union called the order unconstitutional in a statement on Saturday, vowing to file suit in federal court next week.",
+          "attributed_to": "American Civil Liberties Union",
+          "position": 5
+        },
+        {
+          "outlet_domain": "abcnews.go.com",
+          "article_id": "abc",
+          "status": "attributed",
+          "source_quote": "The American Civil Liberties Union called the order unconstitutional in a statement on Saturday, vowing to file suit in federal court next week.",
+          "attributed_to": "American Civil Liberties Union",
+          "position": 6
         },
         {
           "outlet_domain": "foxnews.com",
@@ -206,9 +249,9 @@
           "outlet_domain": "nytimes.com",
           "article_id": "nyt",
           "status": "asserted",
-          "source_quote": "A senior aide to the president resigned Saturday afternoon in protest of the order, according to two people familiar with the matter.",
+          "source_quote": "A senior aide to the president resigned Saturday afternoon in protest of the order, according to two people familiar with the matter who spoke on condition of anonymity.",
           "attributed_to": null,
-          "position": 14
+          "position": 7
         },
         {
           "outlet_domain": "wsj.com",
@@ -221,6 +264,14 @@
         {
           "outlet_domain": "reuters.com",
           "article_id": "reut",
+          "status": "omitted",
+          "source_quote": null,
+          "attributed_to": null,
+          "position": null
+        },
+        {
+          "outlet_domain": "abcnews.go.com",
+          "article_id": "abc",
           "status": "omitted",
           "source_quote": null,
           "attributed_to": null,
@@ -247,16 +298,16 @@
           {
             "term": "sweeping",
             "neutral_alternative": "broad",
-            "in_sentence": "The President signed Executive Order 14123 at a Rose Garden ceremony on Saturday."
+            "in_sentence": "The order's sweeping language drew sharp pushback from immigration advocates and from members of the President's own party."
           }
         ],
         "sources_quoted": [
           "legal scholars",
-          "ACLU",
+          "American Civil Liberties Union",
           "two people familiar with the matter",
           "White House counsel's office"
         ],
-        "stance_summary": "Treats the order as a controversial executive overreach, centering critic voices and legal challenges."
+        "stance_summary": "Treats the order as a controversial executive overreach, centering critic voices and surfacing internal dissent."
       }
     },
     {
@@ -268,7 +319,8 @@
         "sources_quoted": [
           "Wall Street analysts",
           "Democratic lawmakers",
-          "Administration officials"
+          "Administration officials",
+          "senior Republican on the Judiciary Committee"
         ],
         "stance_summary": "Frames the news through a market-reaction lens; emphasizes economic implications over policy substance."
       }
@@ -288,6 +340,20 @@
       }
     },
     {
+      "article_id": "abc",
+      "outlet_domain": "abcnews.go.com",
+      "signals": {
+        "headline_framing": "neutral",
+        "loaded_terms": [],
+        "sources_quoted": [
+          "White House",
+          "senior administration official",
+          "American Civil Liberties Union"
+        ],
+        "stance_summary": "Reposts the Reuters wire under an ABC News byline with a one-line attribution intro."
+      }
+    },
+    {
       "article_id": "fox",
       "outlet_domain": "foxnews.com",
       "signals": {
@@ -296,20 +362,35 @@
           {
             "term": "bold action",
             "neutral_alternative": "action",
-            "in_sentence": "The President took bold action Saturday, signing a new executive order to secure the southern border."
+            "in_sentence": "The President took bold action Saturday, signing a new executive order to secure the southern border and crack down on illegal crossings."
           },
           {
-            "term": "secure",
-            "neutral_alternative": "restrict crossing into",
-            "in_sentence": "The President took bold action Saturday, signing a new executive order to secure the southern border."
+            "term": "crack down on illegal crossings",
+            "neutral_alternative": "enforce border laws",
+            "in_sentence": "The President took bold action Saturday, signing a new executive order to secure the southern border and crack down on illegal crossings."
+          },
+          {
+            "term": "rule of law",
+            "neutral_alternative": "immigration enforcement",
+            "in_sentence": "A Border Patrol union official praised the order as a long-needed restoration of the rule of law."
           }
         ],
         "sources_quoted": [
           "White House",
-          "border patrol union"
+          "Border Patrol union leaders",
+          "Border Patrol union official"
         ],
-        "stance_summary": "Frames the order favorably as decisive border-security action; omits critic perspectives."
+        "stance_summary": "Frames the order favorably as decisive border-security action; omits critic perspectives and centers supportive voices."
       }
+    }
+  ],
+  "syndication_groups": [
+    {
+      "article_ids": [
+        "abc",
+        "reut"
+      ],
+      "similarity": 0.8571428571428571
     }
   ]
 }

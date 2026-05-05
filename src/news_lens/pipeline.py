@@ -31,18 +31,67 @@ from .models import (
     CoverageStatus,
     ExtractionResult,
     OutletCoverage,
+    SyndicationGroup,
     TieredClaim,
 )
+from .syndication import detect_syndication
 
 
-def _compute_tier(coverage: list[OutletCoverage], n_articles: int) -> ConsensusTier:
-    asserted = sum(1 for c in coverage if c.status == CoverageStatus.ASSERTED)
-    attributed = sum(1 for c in coverage if c.status == CoverageStatus.ATTRIBUTED)
-    contradicted = sum(1 for c in coverage if c.status == CoverageStatus.CONTRADICTED)
+_STATUS_PRIORITY = {
+    CoverageStatus.CONTRADICTED: 3,
+    CoverageStatus.ASSERTED: 2,
+    CoverageStatus.ATTRIBUTED: 1,
+    CoverageStatus.OMITTED: 0,
+}
+
+
+def _collapse_syndication(
+    coverage: list[OutletCoverage],
+    n_articles: int,
+    syndication_groups: list[SyndicationGroup] | None,
+) -> tuple[list[OutletCoverage], int]:
+    """Treat syndicated outlets as one voice for tier purposes.
+
+    Three outlets running the same wire copy aren't three independent
+    assertions. This collapses each syndication group's coverage entries to
+    one representative — the strongest non-omitted status, with
+    contradiction beating assertion (an outlet that edited a wire to
+    disagree is meaningful news).
+    """
+    if not syndication_groups:
+        return coverage, n_articles
+
+    rep_of: dict[str, str] = {}
+    for group in syndication_groups:
+        rep = group.article_ids[0]
+        for aid in group.article_ids:
+            rep_of[aid] = rep
+
+    by_rep: dict[str, OutletCoverage] = {}
+    for c in coverage:
+        rep = rep_of.get(c.article_id, c.article_id)
+        existing = by_rep.get(rep)
+        if existing is None or _STATUS_PRIORITY[c.status] > _STATUS_PRIORITY[existing.status]:
+            by_rep[rep] = c
+
+    n_voices = n_articles - sum(len(g.article_ids) - 1 for g in syndication_groups)
+    return list(by_rep.values()), n_voices
+
+
+def _compute_tier(
+    coverage: list[OutletCoverage],
+    n_articles: int,
+    syndication_groups: list[SyndicationGroup] | None = None,
+) -> ConsensusTier:
+    coverage_, n_voices = _collapse_syndication(coverage, n_articles, syndication_groups)
+
+    asserted = sum(1 for c in coverage_ if c.status == CoverageStatus.ASSERTED)
+    attributed = sum(1 for c in coverage_ if c.status == CoverageStatus.ATTRIBUTED)
+    contradicted = sum(1 for c in coverage_ if c.status == CoverageStatus.CONTRADICTED)
 
     if contradicted > 0:
         return ConsensusTier.DISPUTED
-    if asserted == n_articles:
+    if asserted == n_voices:
         return ConsensusTier.UNIVERSAL
     if asserted + attributed == 1:
         return ConsensusTier.SINGLE_SOURCED
@@ -97,6 +146,13 @@ async def _run_async(
     }
     lenses = [lens for _, lens in per_article]
 
+    syndication_groups = detect_syndication(articles)
+    if syndication_groups:
+        print(
+            f"Detected {len(syndication_groups)} syndication group(s)",
+            file=sys.stderr,
+        )
+
     print(f"Aligning claims across {len(articles)} article(s)", file=sys.stderr)
     alignment = await align_claims(articles, extractions, client, cache)
     print(
@@ -107,14 +163,19 @@ async def _run_async(
     tiered = [
         TieredClaim(
             canonical_text=cc.canonical_text,
-            tier=_compute_tier(cc.outlets, len(articles)),
+            tier=_compute_tier(cc.outlets, len(articles), syndication_groups),
             outlets=cc.outlets,
         )
         for cc in alignment.canonical_claims
     ]
     tiered.sort(key=lambda c: _TIER_ORDER[c.tier])
 
-    return CoverageMatrix(articles=articles, claims=tiered, lenses=lenses)
+    return CoverageMatrix(
+        articles=articles,
+        claims=tiered,
+        lenses=lenses,
+        syndication_groups=syndication_groups,
+    )
 
 
 def run_pipeline(
