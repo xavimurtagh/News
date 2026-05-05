@@ -1,0 +1,20 @@
+[project]
+name = "news-lens"
+version = "0.1.0"
+description = "Multi-source fact abstraction with bias-lens analysis for news"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.45",
+    "pydantic>=2",
+    "trafilatura>=1.12",
+]
+
+[project.scripts]
+news-lens = "news_lens.__main__:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

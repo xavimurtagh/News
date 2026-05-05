@@ -1,0 +1,71 @@
+"""CLI entry point.
+
+Usage:
+    python -m news_lens URL1 URL2 [URL3 ...]
+    python -m news_lens --urls-file path/to/urls.txt
+    python -m news_lens URL1 URL2 --output coverage.json
+
+Set ANTHROPIC_API_KEY in the environment before running.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from .pipeline import run_pipeline
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "urls",
+        nargs="*",
+        help="Article URLs covering the same event.",
+    )
+    parser.add_argument(
+        "--urls-file",
+        type=Path,
+        help="Path to a file with one URL per line. Lines starting with # are ignored.",
+    )
+    parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=Path(".cache"),
+        help="Directory to cache pipeline results (default: .cache).",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Path to write JSON output (default: stdout).",
+    )
+    args = parser.parse_args()
+
+    urls = list(args.urls)
+    if args.urls_file:
+        urls.extend(
+            line.strip()
+            for line in args.urls_file.read_text().splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        )
+
+    if not urls:
+        parser.error("Provide at least one URL (positional or via --urls-file).")
+        return 2
+
+    matrix = run_pipeline(urls, cache_dir=args.cache_dir)
+    output_json = matrix.model_dump_json(indent=2)
+
+    if args.output:
+        args.output.write_text(output_json)
+        print(f"Wrote coverage matrix to {args.output}", file=sys.stderr)
+    else:
+        print(output_json)
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
