@@ -48,10 +48,10 @@ Rules:
 """
 
 
-def align_claims(
+async def align_claims(
     articles: list[Article],
     extractions: Mapping[str, ExtractionResult],
-    client: anthropic.Anthropic,
+    client: anthropic.AsyncAnthropic,
     cache: Cache,
 ) -> AlignmentResult:
     payload_obj = {
@@ -74,7 +74,7 @@ def align_claims(
     if cached is not None:
         return AlignmentResult.model_validate(cached)
 
-    response = client.messages.parse(
+    response = await client.messages.parse(
         model=_MODEL,
         max_tokens=16000,
         thinking={"type": "adaptive"},

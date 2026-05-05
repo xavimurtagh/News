@@ -1,7 +1,17 @@
-"""End-to-end pipeline: URLs in, coverage matrix out."""
+"""End-to-end pipeline: URLs in, coverage matrix out.
+
+Concurrency model:
+- All article fetches run in parallel.
+- Per article, claim extraction and lens analysis run in parallel.
+- Cross-article alignment is sequential (depends on every extraction).
+
+`run_pipeline` is the sync entrypoint and calls asyncio.run on the coroutine,
+so callers don't need to know about the event loop.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -19,6 +29,7 @@ from .models import (
     ConsensusTier,
     CoverageMatrix,
     CoverageStatus,
+    ExtractionResult,
     OutletCoverage,
     TieredClaim,
 )
@@ -49,38 +60,45 @@ _TIER_ORDER = {
 }
 
 
-def run_pipeline(
+async def _analyze_article(
+    article: Article,
+    client: anthropic.AsyncAnthropic,
+    cache: Cache,
+) -> tuple[ExtractionResult, ArticleLens]:
+    print(f"[{article.outlet_domain}] analyzing", file=sys.stderr)
+    extraction, lens = await asyncio.gather(
+        extract_claims(article, client, cache),
+        analyze_lens(article, client, cache),
+    )
+    print(
+        f"[{article.outlet_domain}] {len(extraction.claims)} claims, "
+        f"{len(lens.signals.loaded_terms)} loaded terms",
+        file=sys.stderr,
+    )
+    return extraction, lens
+
+
+async def _run_async(
     urls: list[str],
-    cache_dir: Path | None = None,
-    api_key: str | None = None,
+    client: anthropic.AsyncAnthropic,
+    cache: Cache,
 ) -> CoverageMatrix:
-    cache = Cache(cache_dir or Path(".cache"))
-    client = anthropic.Anthropic(
-        api_key=api_key or os.environ.get("ANTHROPIC_API_KEY")
+    print(f"Fetching {len(urls)} article(s)", file=sys.stderr)
+    articles = list(
+        await asyncio.gather(*[fetch_article(url) for url in urls])
     )
 
-    articles: list[Article] = []
-    for url in urls:
-        print(f"Fetching {url}", file=sys.stderr)
-        articles.append(fetch_article(url))
+    per_article = await asyncio.gather(
+        *[_analyze_article(a, client, cache) for a in articles]
+    )
+    extractions = {
+        article.id: extraction
+        for article, (extraction, _) in zip(articles, per_article)
+    }
+    lenses = [lens for _, lens in per_article]
 
-    extractions = {}
-    lenses: list[ArticleLens] = []
-    for article in articles:
-        print(
-            f"Analyzing {article.outlet_domain} ({len(article.body)} chars)",
-            file=sys.stderr,
-        )
-        extractions[article.id] = extract_claims(article, client, cache)
-        lenses.append(analyze_lens(article, client, cache))
-        print(
-            f"  -> {len(extractions[article.id].claims)} claims, "
-            f"{len(lenses[-1].signals.loaded_terms)} loaded terms",
-            file=sys.stderr,
-        )
-
-    print(f"Aligning claims across {len(articles)} articles", file=sys.stderr)
-    alignment = align_claims(articles, extractions, client, cache)
+    print(f"Aligning claims across {len(articles)} article(s)", file=sys.stderr)
+    alignment = await align_claims(articles, extractions, client, cache)
     print(
         f"  -> {len(alignment.canonical_claims)} canonical claims",
         file=sys.stderr,
@@ -97,3 +115,15 @@ def run_pipeline(
     tiered.sort(key=lambda c: _TIER_ORDER[c.tier])
 
     return CoverageMatrix(articles=articles, claims=tiered, lenses=lenses)
+
+
+def run_pipeline(
+    urls: list[str],
+    cache_dir: Path | None = None,
+    api_key: str | None = None,
+) -> CoverageMatrix:
+    cache = Cache(cache_dir or Path(".cache"))
+    client = anthropic.AsyncAnthropic(
+        api_key=api_key or os.environ.get("ANTHROPIC_API_KEY")
+    )
+    return asyncio.run(_run_async(urls, client, cache))

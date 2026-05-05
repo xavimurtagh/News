@@ -1,7 +1,13 @@
-"""Fetch and parse news articles from URLs."""
+"""Fetch and parse news articles from URLs.
+
+Network and HTML parsing are blocking, so the public coroutine wraps them in
+asyncio.to_thread. That keeps the pipeline's per-article fetches concurrent
+without forking subprocesses.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -27,13 +33,14 @@ def _paragraph_count(body: str) -> int:
     return max(1, sum(1 for p in body.split("\n\n") if p.strip()))
 
 
-def fetch_article(url: str) -> Article:
+async def fetch_article(url: str) -> Article:
     """Fetch a URL and return a parsed Article. Raises ValueError on failure."""
-    raw_html = trafilatura.fetch_url(url)
+    raw_html = await asyncio.to_thread(trafilatura.fetch_url, url)
     if raw_html is None:
         raise ValueError(f"Could not fetch URL: {url}")
 
-    body = trafilatura.extract(
+    body = await asyncio.to_thread(
+        trafilatura.extract,
         raw_html,
         favor_recall=True,
         include_comments=False,
@@ -46,7 +53,7 @@ def fetch_article(url: str) -> Article:
     byline: str | None = None
     published_at: datetime | None = None
 
-    metadata = extract_metadata(raw_html)
+    metadata = await asyncio.to_thread(extract_metadata, raw_html)
     if metadata is not None:
         title = metadata.title
         byline = metadata.author

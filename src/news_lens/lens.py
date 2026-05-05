@@ -54,9 +54,9 @@ Rules:
 """
 
 
-def analyze_lens(
+async def analyze_lens(
     article: Article,
-    client: anthropic.Anthropic,
+    client: anthropic.AsyncAnthropic,
     cache: Cache,
 ) -> ArticleLens:
     prompt_hash = hashlib.sha256(_SYSTEM_PROMPT.encode("utf-8")).hexdigest()[:12]
@@ -70,7 +70,7 @@ def analyze_lens(
         f"Article body:\n---\n{article.body}\n---"
     )
 
-    response = client.messages.parse(
+    response = await client.messages.parse(
         model=_MODEL,
         max_tokens=8000,
         thinking={"type": "adaptive"},

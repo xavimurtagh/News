@@ -46,9 +46,9 @@ Rules:
 """
 
 
-def extract_claims(
+async def extract_claims(
     article: Article,
-    client: anthropic.Anthropic,
+    client: anthropic.AsyncAnthropic,
     cache: Cache,
 ) -> ExtractionResult:
     prompt_hash = hashlib.sha256(_SYSTEM_PROMPT.encode("utf-8")).hexdigest()[:12]
@@ -63,7 +63,7 @@ def extract_claims(
         f"Article body:\n---\n{article.body}\n---"
     )
 
-    response = client.messages.parse(
+    response = await client.messages.parse(
         model=_MODEL,
         max_tokens=16000,
         thinking={"type": "adaptive"},
