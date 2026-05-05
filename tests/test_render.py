@@ -17,7 +17,7 @@ from news_lens.models import (
     OutletCoverage,
     TieredClaim,
 )
-from news_lens.render import _highlight_term, _position_label, render_html
+from news_lens.render import _highlight_term, _highlight_terms, _position_label, render_html
 
 
 def _well_formed(html_doc: str) -> tuple[list[str], list[str]]:
@@ -72,6 +72,23 @@ def test_highlight_term_escapes_html():
     html_str = _highlight_term("Said <b>this</b> is fine.", "fine")
     assert "<b>" not in html_str
     assert "&lt;b&gt;" in html_str
+
+
+def test_highlight_terms_handles_multiple():
+    html_str = _highlight_terms("The bold action took crackdown to a new level.", ["bold action", "crackdown"])
+    assert html_str.count("<mark>") == 2
+
+
+def test_highlight_terms_prefers_longer_overlap():
+    """A longer phrase should win over a shorter substring it contains."""
+    html_str = _highlight_terms("rule of law was restored", ["rule of law", "law"])
+    # We expect one mark wrapping "rule of law", not two overlapping marks.
+    assert html_str.count("<mark>") == 1
+    assert "<mark>rule of law</mark>" in html_str
+
+
+def test_highlight_terms_empty_terms():
+    assert _highlight_terms("hello world", []) == "hello world"
 
 
 def _matrix(with_lens: bool = True) -> CoverageMatrix:

@@ -370,18 +370,44 @@ details.claim .canonical {
 }
 .citation {
   display: grid;
-  grid-template-columns: 140px 1fr;
+  grid-template-columns: 160px 1fr;
   gap: 14px;
   font-size: 14px;
   align-items: baseline;
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
 }
+.citation[data-framing="positive"] { border-left-color: #2563eb; }
+.citation[data-framing="neutral"] { border-left-color: #6b7280; }
+.citation[data-framing="negative"] { border-left-color: #c0392b; }
+.citation[data-framing="mixed"] { border-left-color: #7c3aed; }
 .citation .outlet-cell {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: var(--accent);
   font-weight: 600;
   font-size: 13px;
+  flex-wrap: wrap;
+}
+.citation .framing-pill {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 8px;
+  color: #fff;
+}
+.citation[data-framing="positive"] .framing-pill { background: #2563eb; }
+.citation[data-framing="neutral"] .framing-pill { background: #6b7280; }
+.citation[data-framing="negative"] .framing-pill { background: #c0392b; }
+.citation[data-framing="mixed"] .framing-pill { background: #7c3aed; }
+.citation blockquote mark {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 0 2px;
+  border-radius: 2px;
 }
 .citation .status-pill {
   padding: 1px 7px;
@@ -731,6 +757,7 @@ def _render_citations(
     claim: TieredClaim,
     outlet_order: list[str],
     articles_by_id: dict[str, Article],
+    lenses_by_id: dict[str, ArticleLens],
 ) -> str:
     by_outlet = _coverage_by_outlet(claim.outlets)
     parts = []
@@ -740,18 +767,37 @@ def _render_citations(
             continue
         status_label = _STATUS_LABEL[cov.status]
         status_cls = cov.status.value
+
+        lens = lenses_by_id.get(cov.article_id)
+        framing_attr = ""
+        framing_html = ""
+        if lens is not None:
+            framing = lens.signals.headline_framing
+            framing_attr = f' data-framing="{framing.value}"'
+            framing_html = (
+                f'<span class="framing-pill">{_esc(_FRAMING_LABEL[framing])}</span>'
+            )
+
         if cov.source_quote:
-            quote_html = f"<blockquote>{_esc(cov.source_quote)}</blockquote>"
+            terms_to_highlight: list[str] = []
+            if lens is not None:
+                terms_to_highlight = [
+                    t.term for t in lens.signals.loaded_terms if t.term
+                ]
+            quote_inner = _highlight_terms(cov.source_quote, terms_to_highlight)
+            quote_html = f"<blockquote>{quote_inner}</blockquote>"
         else:
             quote_html = (
                 f'<blockquote class="empty">— ({status_label.lower()})</blockquote>'
             )
+
         attr_html = ""
         if cov.attributed_to:
             attr_html = (
                 f'<span class="attributed-to">attributed to '
                 f"{_esc(cov.attributed_to)}</span>"
             )
+
         position_html = ""
         article = articles_by_id.get(cov.article_id)
         if article and cov.position:
@@ -760,11 +806,14 @@ def _render_citations(
                 position_html = (
                     f' <span class="position-label">{_esc(label)}</span>'
                 )
+
+        outlet_friendly = _outlet_display_name(outlet)
         parts.append(
-            f'<div class="citation">'
+            f'<div class="citation"{framing_attr}>'
             f'<div class="outlet-cell">'
-            f'<span>{_esc(outlet)}</span>'
+            f'<span>{_esc(outlet_friendly)}</span>'
             f'<span class="status-pill {status_cls}">{_esc(status_label)}</span>'
+            f"{framing_html}"
             f"{position_html}"
             f"</div>"
             f"<div>{quote_html}{attr_html}</div>"
@@ -777,6 +826,7 @@ def _render_claim(
     claim: TieredClaim,
     outlet_order: list[str],
     articles_by_id: dict[str, Article],
+    lenses_by_id: dict[str, ArticleLens],
 ) -> str:
     grid = _grid_template(len(outlet_order))
     cells = _render_cells(claim, outlet_order)
@@ -786,7 +836,7 @@ def _render_claim(
         f'<span class="canonical">{_esc(claim.canonical_text)}</span>'
         f"{cells}"
         f"</summary>"
-        f"{_render_citations(claim, outlet_order, articles_by_id)}"
+        f"{_render_citations(claim, outlet_order, articles_by_id, lenses_by_id)}"
         f"</details>"
     )
 
@@ -796,8 +846,11 @@ def _render_tier_section(
     claims: list[TieredClaim],
     outlet_order: list[str],
     articles_by_id: dict[str, Article],
+    lenses_by_id: dict[str, ArticleLens],
 ) -> str:
-    rows = "".join(_render_claim(c, outlet_order, articles_by_id) for c in claims)
+    rows = "".join(
+        _render_claim(c, outlet_order, articles_by_id, lenses_by_id) for c in claims
+    )
     return (
         f'<details class="tier" data-tier="{tier.value}" open>'
         f"<summary>"
@@ -816,11 +869,14 @@ def _render_matrix(matrix: CoverageMatrix, outlet_order: list[str]) -> str:
         by_tier[c.tier].append(c)
 
     articles_by_id = {a.id: a for a in matrix.articles}
+    lenses_by_id = {l.article_id: l for l in matrix.lenses}
     sections = []
     for tier in _TIER_ORDER:
         if tier in by_tier:
             sections.append(
-                _render_tier_section(tier, by_tier[tier], outlet_order, articles_by_id)
+                _render_tier_section(
+                    tier, by_tier[tier], outlet_order, articles_by_id, lenses_by_id
+                )
             )
     return f'<div class="matrix-frame">{_render_matrix_head(outlet_order)}{"".join(sections)}</div>'
 
@@ -878,10 +934,17 @@ def _compute_fingerprints(
     return stats
 
 
-def _highlight_term(sentence: str, term: str) -> str:
-    if not term:
+def _highlight_terms(sentence: str, terms: list[str]) -> str:
+    """Wrap every occurrence of any term from `terms` in <mark>.
+
+    Longer terms are tried first so a phrase like "rule of law" doesn't get
+    pre-empted by partial matches on "rule" or "law".
+    """
+    cleaned = [t for t in terms if t]
+    if not cleaned:
         return _esc(sentence)
-    pattern = re.compile(re.escape(term), re.IGNORECASE)
+    sorted_terms = sorted(set(cleaned), key=len, reverse=True)
+    pattern = re.compile("|".join(re.escape(t) for t in sorted_terms), re.IGNORECASE)
     parts: list[str] = []
     last = 0
     for m in pattern.finditer(sentence):
@@ -890,6 +953,11 @@ def _highlight_term(sentence: str, term: str) -> str:
         last = m.end()
     parts.append(_esc(sentence[last:]))
     return "".join(parts)
+
+
+def _highlight_term(sentence: str, term: str) -> str:
+    """Single-term highlight helper retained for the lens cards."""
+    return _highlight_terms(sentence, [term] if term else [])
 
 
 def _render_loaded_terms(terms: list[LoadedTerm]) -> str:
