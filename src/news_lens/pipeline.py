@@ -33,10 +33,10 @@ def _compute_tier(coverage: list[OutletCoverage], n_articles: int) -> ConsensusT
         return ConsensusTier.DISPUTED
     if asserted == n_articles:
         return ConsensusTier.UNIVERSAL
-    if asserted == 0 and attributed > 0:
-        return ConsensusTier.ATTRIBUTED_ONLY
     if asserted + attributed == 1:
         return ConsensusTier.SINGLE_SOURCED
+    if asserted == 0 and attributed > 0:
+        return ConsensusTier.ATTRIBUTED_ONLY
     return ConsensusTier.MAJORITY
 
 

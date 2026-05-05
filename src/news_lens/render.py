@@ -604,7 +604,10 @@ def _position_label(position: int | None, total: int) -> str:
         return ""
     if total <= 0:
         return f"¶ {position}"
-    third = max(1.0, total / 3)
+    if total < 3:
+        # Banding by thirds is meaningless for very short articles.
+        return f"¶ {position}/{total}"
+    third = total / 3
     band = "early" if position <= third else "middle" if position <= 2 * third else "late"
     return f"¶ {position}/{total} · {band}"
 

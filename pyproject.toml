@@ -9,6 +9,9 @@ dependencies = [
     "trafilatura>=1.12",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
 [project.scripts]
 news-lens = "news_lens.__main__:main"
 

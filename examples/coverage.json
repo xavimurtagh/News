@@ -1,0 +1,315 @@
+{
+  "articles": [
+    {
+      "id": "nyt",
+      "url": "https://nytimes.com/2026/05/04/border-order",
+      "outlet_domain": "nytimes.com",
+      "title": "President Signs Sweeping Order on Border Policy",
+      "byline": "Reporter Name",
+      "published_at": "2026-05-04T16:30:00Z",
+      "fetched_at": "2026-05-04T16:30:00Z",
+      "body": "(synthetic body)",
+      "paragraph_count": 18
+    },
+    {
+      "id": "wsj",
+      "url": "https://wsj.com/2026/05/04/border-order",
+      "outlet_domain": "wsj.com",
+      "title": "Border Executive Order Takes Effect; Markets Mixed",
+      "byline": "Reporter Name",
+      "published_at": "2026-05-04T16:30:00Z",
+      "fetched_at": "2026-05-04T16:30:00Z",
+      "body": "(synthetic body)",
+      "paragraph_count": 14
+    },
+    {
+      "id": "reut",
+      "url": "https://reuters.com/2026/05/04/border-order",
+      "outlet_domain": "reuters.com",
+      "title": "U.S. President Signs Border Executive Order",
+      "byline": "Reporter Name",
+      "published_at": "2026-05-04T16:30:00Z",
+      "fetched_at": "2026-05-04T16:30:00Z",
+      "body": "(synthetic body)",
+      "paragraph_count": 9
+    },
+    {
+      "id": "fox",
+      "url": "https://foxnews.com/2026/05/04/border-order",
+      "outlet_domain": "foxnews.com",
+      "title": "President Acts to Secure the Border with Bold Executive Order",
+      "byline": "Reporter Name",
+      "published_at": "2026-05-04T16:30:00Z",
+      "fetched_at": "2026-05-04T16:30:00Z",
+      "body": "(synthetic body)",
+      "paragraph_count": 16
+    }
+  ],
+  "claims": [
+    {
+      "canonical_text": "The U.S. President signed an executive order on border policy on May 4, 2026.",
+      "tier": "universal",
+      "outlets": [
+        {
+          "outlet_domain": "nytimes.com",
+          "article_id": "nyt",
+          "status": "asserted",
+          "source_quote": "The President signed Executive Order 14123 at a Rose Garden ceremony on Saturday.",
+          "attributed_to": null,
+          "position": 1
+        },
+        {
+          "outlet_domain": "wsj.com",
+          "article_id": "wsj",
+          "status": "asserted",
+          "source_quote": "President signed an executive order Saturday at the White House, taking effect immediately.",
+          "attributed_to": null,
+          "position": 1
+        },
+        {
+          "outlet_domain": "reuters.com",
+          "article_id": "reut",
+          "status": "asserted",
+          "source_quote": "U.S. President signed an executive order on border policy on Saturday, the White House said.",
+          "attributed_to": null,
+          "position": 1
+        },
+        {
+          "outlet_domain": "foxnews.com",
+          "article_id": "fox",
+          "status": "asserted",
+          "source_quote": "The President took bold action Saturday, signing a new executive order to secure the southern border.",
+          "attributed_to": null,
+          "position": 1
+        }
+      ]
+    },
+    {
+      "canonical_text": "The order takes effect immediately upon signing.",
+      "tier": "majority",
+      "outlets": [
+        {
+          "outlet_domain": "nytimes.com",
+          "article_id": "nyt",
+          "status": "asserted",
+          "source_quote": "The order is effective immediately, according to the text released by the White House counsel's office.",
+          "attributed_to": null,
+          "position": 3
+        },
+        {
+          "outlet_domain": "wsj.com",
+          "article_id": "wsj",
+          "status": "asserted",
+          "source_quote": "President signed an executive order Saturday at the White House, taking effect immediately.",
+          "attributed_to": null,
+          "position": 1
+        },
+        {
+          "outlet_domain": "foxnews.com",
+          "article_id": "fox",
+          "status": "asserted",
+          "source_quote": "The order takes effect immediately, the White House said.",
+          "attributed_to": null,
+          "position": 2
+        },
+        {
+          "outlet_domain": "reuters.com",
+          "article_id": "reut",
+          "status": "omitted",
+          "source_quote": null,
+          "attributed_to": null,
+          "position": null
+        }
+      ]
+    },
+    {
+      "canonical_text": "An estimated number of people will be affected by the order.",
+      "tier": "disputed",
+      "outlets": [
+        {
+          "outlet_domain": "nytimes.com",
+          "article_id": "nyt",
+          "status": "asserted",
+          "source_quote": "An estimated 5 million people are expected to be affected by the new policy.",
+          "attributed_to": null,
+          "position": 4
+        },
+        {
+          "outlet_domain": "wsj.com",
+          "article_id": "wsj",
+          "status": "contradicted",
+          "source_quote": "Administration officials said the policy would directly affect roughly 1.2 million people.",
+          "attributed_to": null,
+          "position": 5
+        },
+        {
+          "outlet_domain": "reuters.com",
+          "article_id": "reut",
+          "status": "attributed",
+          "source_quote": "A senior administration official said the policy could affect up to 5 million people.",
+          "attributed_to": "senior administration official",
+          "position": 4
+        },
+        {
+          "outlet_domain": "foxnews.com",
+          "article_id": "fox",
+          "status": "omitted",
+          "source_quote": null,
+          "attributed_to": null,
+          "position": null
+        }
+      ]
+    },
+    {
+      "canonical_text": "Critics say the order is unconstitutional.",
+      "tier": "attributed_only",
+      "outlets": [
+        {
+          "outlet_domain": "nytimes.com",
+          "article_id": "nyt",
+          "status": "attributed",
+          "source_quote": "Several legal scholars said the order exceeded the executive branch's authority and was likely to face immediate legal challenge.",
+          "attributed_to": "legal scholars",
+          "position": 6
+        },
+        {
+          "outlet_domain": "reuters.com",
+          "article_id": "reut",
+          "status": "attributed",
+          "source_quote": "The American Civil Liberties Union called the order unconstitutional in a statement on Saturday.",
+          "attributed_to": "American Civil Liberties Union",
+          "position": 6
+        },
+        {
+          "outlet_domain": "wsj.com",
+          "article_id": "wsj",
+          "status": "attributed",
+          "source_quote": "Democratic lawmakers vowed to challenge the order in court, calling it an unconstitutional overreach.",
+          "attributed_to": "Democratic lawmakers",
+          "position": 11
+        },
+        {
+          "outlet_domain": "foxnews.com",
+          "article_id": "fox",
+          "status": "omitted",
+          "source_quote": null,
+          "attributed_to": null,
+          "position": null
+        }
+      ]
+    },
+    {
+      "canonical_text": "A senior aide resigned in protest of the order.",
+      "tier": "single_sourced",
+      "outlets": [
+        {
+          "outlet_domain": "nytimes.com",
+          "article_id": "nyt",
+          "status": "asserted",
+          "source_quote": "A senior aide to the president resigned Saturday afternoon in protest of the order, according to two people familiar with the matter.",
+          "attributed_to": null,
+          "position": 14
+        },
+        {
+          "outlet_domain": "wsj.com",
+          "article_id": "wsj",
+          "status": "omitted",
+          "source_quote": null,
+          "attributed_to": null,
+          "position": null
+        },
+        {
+          "outlet_domain": "reuters.com",
+          "article_id": "reut",
+          "status": "omitted",
+          "source_quote": null,
+          "attributed_to": null,
+          "position": null
+        },
+        {
+          "outlet_domain": "foxnews.com",
+          "article_id": "fox",
+          "status": "omitted",
+          "source_quote": null,
+          "attributed_to": null,
+          "position": null
+        }
+      ]
+    }
+  ],
+  "lenses": [
+    {
+      "article_id": "nyt",
+      "outlet_domain": "nytimes.com",
+      "signals": {
+        "headline_framing": "negative",
+        "loaded_terms": [
+          {
+            "term": "sweeping",
+            "neutral_alternative": "broad",
+            "in_sentence": "The President signed Executive Order 14123 at a Rose Garden ceremony on Saturday."
+          }
+        ],
+        "sources_quoted": [
+          "legal scholars",
+          "ACLU",
+          "two people familiar with the matter",
+          "White House counsel's office"
+        ],
+        "stance_summary": "Treats the order as a controversial executive overreach, centering critic voices and legal challenges."
+      }
+    },
+    {
+      "article_id": "wsj",
+      "outlet_domain": "wsj.com",
+      "signals": {
+        "headline_framing": "mixed",
+        "loaded_terms": [],
+        "sources_quoted": [
+          "Wall Street analysts",
+          "Democratic lawmakers",
+          "Administration officials"
+        ],
+        "stance_summary": "Frames the news through a market-reaction lens; emphasizes economic implications over policy substance."
+      }
+    },
+    {
+      "article_id": "reut",
+      "outlet_domain": "reuters.com",
+      "signals": {
+        "headline_framing": "neutral",
+        "loaded_terms": [],
+        "sources_quoted": [
+          "White House",
+          "senior administration official",
+          "American Civil Liberties Union"
+        ],
+        "stance_summary": "Wire-style summary attributing every statement to its source; minimal characterization."
+      }
+    },
+    {
+      "article_id": "fox",
+      "outlet_domain": "foxnews.com",
+      "signals": {
+        "headline_framing": "positive",
+        "loaded_terms": [
+          {
+            "term": "bold action",
+            "neutral_alternative": "action",
+            "in_sentence": "The President took bold action Saturday, signing a new executive order to secure the southern border."
+          },
+          {
+            "term": "secure",
+            "neutral_alternative": "restrict crossing into",
+            "in_sentence": "The President took bold action Saturday, signing a new executive order to secure the southern border."
+          }
+        ],
+        "sources_quoted": [
+          "White House",
+          "border patrol union"
+        ],
+        "stance_summary": "Frames the order favorably as decisive border-security action; omits critic perspectives."
+      }
+    }
+  ]
+}
