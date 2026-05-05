@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from .pipeline import run_pipeline
+from .render import render_html
 
 
 def main() -> int:
@@ -41,6 +42,12 @@ def main() -> int:
         default=None,
         help="Path to write JSON output (default: stdout).",
     )
+    parser.add_argument(
+        "--html",
+        type=Path,
+        default=None,
+        help="Path to write a self-contained HTML coverage matrix.",
+    )
     args = parser.parse_args()
 
     urls = list(args.urls)
@@ -61,8 +68,12 @@ def main() -> int:
     if args.output:
         args.output.write_text(output_json)
         print(f"Wrote coverage matrix to {args.output}", file=sys.stderr)
-    else:
+    elif not args.html:
         print(output_json)
+
+    if args.html:
+        args.html.write_text(render_html(matrix))
+        print(f"Wrote HTML report to {args.html}", file=sys.stderr)
 
     return 0
 
