@@ -34,6 +34,8 @@ from .models import (
     SyndicationGroup,
     TieredClaim,
 )
+from .outlets import display_name as _outlet_display_name
+from .outlets import lookup as _outlet_lookup
 
 
 def _esc(value: str | None) -> str:
@@ -194,18 +196,54 @@ section h2 {
   font-size: 14px;
 }
 .article .outlet {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.article .outlet .name {
   font-weight: 600;
   color: var(--accent);
+  line-height: 1.2;
+}
+.article .outlet .domain {
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+.article .outlet .meta {
+  font-size: 11px;
+  color: var(--text-subtle);
 }
 .article .title {
   font-family: Georgia, "Times New Roman", serif;
   color: var(--text);
+}
+.article .title-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .article .date {
   color: var(--text-subtle);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
+.article-framing-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 7px;
+  border-radius: 10px;
+  color: #fff;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.article-framing-badge[data-framing="positive"] { background: #2563eb; }
+.article-framing-badge[data-framing="neutral"] { background: #6b7280; }
+.article-framing-badge[data-framing="negative"] { background: #c0392b; }
+.article-framing-badge[data-framing="mixed"] { background: #7c3aed; }
 .article .syndication-badge {
   display: inline-block;
   margin-top: 4px;
@@ -588,29 +626,62 @@ def _render_articles(
     articles: list[Article],
     outlet_order: list[str],
     syndication_groups: list[SyndicationGroup],
+    lenses: list[ArticleLens],
 ) -> str:
     by_outlet = {a.outlet_domain: a for a in articles}
     articles_by_id = {a.id: a for a in articles}
+    lens_by_id = {l.article_id: l for l in lenses}
     rows = []
     for outlet in outlet_order:
         a = by_outlet[outlet]
         date = a.published_at.date().isoformat() if a.published_at else "—"
         title = a.title or a.url
-        partners = _syndication_partners(a, syndication_groups, articles_by_id)
-        title_block = (
+
+        info = _outlet_lookup(outlet)
+        friendly_name = info.name if info else outlet
+        meta_line = (
+            f'<span class="meta">{_esc(info.country)} · {_esc(info.outlet_type)}</span>'
+            if info
+            else ""
+        )
+        outlet_block = (
+            f'<div class="outlet">'
+            f'<span class="name">{_esc(friendly_name)}</span>'
+            f'<span class="domain">{_esc(outlet)}</span>'
+            f"{meta_line}"
+            f"</div>"
+        )
+
+        framing_badge = ""
+        lens = lens_by_id.get(a.id)
+        if lens is not None:
+            framing = lens.signals.headline_framing
+            framing_badge = (
+                f'<span class="article-framing-badge" data-framing="{framing.value}">'
+                f"{_esc(_FRAMING_LABEL[framing])}"
+                f"</span>"
+            )
+
+        title_inner = (
             f'<a href="{_esc(a.url)}" target="_blank" rel="noopener">{_esc(title)}</a>'
         )
+        title_line = (
+            f'<div class="title-line">{title_inner}{framing_badge}</div>'
+        )
+
+        partners = _syndication_partners(a, syndication_groups, articles_by_id)
         if partners:
             partners_str = ", ".join(_esc(p) for p in partners)
-            title_block += (
-                f'<br><span class="syndication-badge">'
+            title_line += (
+                f'<span class="syndication-badge">'
                 f"Syndicated copy — overlaps with {partners_str}"
                 f"</span>"
             )
+
         rows.append(
             f'<div class="article">'
-            f'<div class="outlet">{_esc(outlet)}</div>'
-            f'<div class="title">{title_block}</div>'
+            f"{outlet_block}"
+            f'<div class="title">{title_line}</div>'
             f'<div class="date">{_esc(date)}</div>'
             f"</div>"
         )
@@ -947,7 +1018,7 @@ def render_html(matrix: CoverageMatrix) -> str:
         "</header>"
         "<section>"
         "<h2>Articles</h2>"
-        f"{_render_articles(matrix.articles, outlet_order, matrix.syndication_groups)}"
+        f"{_render_articles(matrix.articles, outlet_order, matrix.syndication_groups, matrix.lenses)}"
         "</section>"
         "<section>"
         "<h2>Coverage Matrix</h2>"
