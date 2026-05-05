@@ -12,8 +12,10 @@ from .align import align_claims
 from .cache import Cache
 from .extract import extract_claims
 from .ingest import fetch_article
+from .lens import analyze_lens
 from .models import (
     Article,
+    ArticleLens,
     ConsensusTier,
     CoverageMatrix,
     CoverageStatus,
@@ -63,14 +65,17 @@ def run_pipeline(
         articles.append(fetch_article(url))
 
     extractions = {}
+    lenses: list[ArticleLens] = []
     for article in articles:
         print(
-            f"Extracting claims from {article.outlet_domain} ({len(article.body)} chars)",
+            f"Analyzing {article.outlet_domain} ({len(article.body)} chars)",
             file=sys.stderr,
         )
         extractions[article.id] = extract_claims(article, client, cache)
+        lenses.append(analyze_lens(article, client, cache))
         print(
-            f"  -> {len(extractions[article.id].claims)} claims",
+            f"  -> {len(extractions[article.id].claims)} claims, "
+            f"{len(lenses[-1].signals.loaded_terms)} loaded terms",
             file=sys.stderr,
         )
 
@@ -91,4 +96,4 @@ def run_pipeline(
     ]
     tiered.sort(key=lambda c: _TIER_ORDER[c.tier])
 
-    return CoverageMatrix(articles=articles, claims=tiered)
+    return CoverageMatrix(articles=articles, claims=tiered, lenses=lenses)

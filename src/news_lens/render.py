@@ -17,15 +17,19 @@ Layout, top to bottom:
 from __future__ import annotations
 
 import html
+import re
 from collections import defaultdict
 from datetime import datetime
 from typing import Iterable
 
 from .models import (
     Article,
+    ArticleLens,
     ConsensusTier,
     CoverageMatrix,
     CoverageStatus,
+    HeadlineFraming,
+    LoadedTerm,
     OutletCoverage,
     TieredClaim,
 )
@@ -71,6 +75,13 @@ _STATUS_LABEL = {
     CoverageStatus.ATTRIBUTED: "Attributed",
     CoverageStatus.CONTRADICTED: "Contradicted",
     CoverageStatus.OMITTED: "Omitted",
+}
+
+_FRAMING_LABEL = {
+    HeadlineFraming.POSITIVE: "Positive framing",
+    HeadlineFraming.NEUTRAL: "Neutral framing",
+    HeadlineFraming.NEGATIVE: "Negative framing",
+    HeadlineFraming.MIXED: "Mixed framing",
 }
 
 
@@ -416,11 +427,113 @@ footer.site {
   color: var(--text-subtle);
 }
 
+.lens-cards {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 900px) {
+  .lens-cards.split-2 { grid-template-columns: 1fr 1fr; }
+  .lens-cards.split-3 { grid-template-columns: repeat(3, 1fr); }
+}
+
+.lens-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 14px 16px;
+}
+.lens-card[data-framing="positive"] { border-left-color: #2563eb; }
+.lens-card[data-framing="neutral"] { border-left-color: #6b7280; }
+.lens-card[data-framing="negative"] { border-left-color: #c0392b; }
+.lens-card[data-framing="mixed"] { border-left-color: #7c3aed; }
+
+.lens-card .head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.lens-card .outlet { font-weight: 600; color: var(--accent); }
+.lens-card .framing-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  color: #fff;
+}
+.lens-card[data-framing="positive"] .framing-badge { background: #2563eb; }
+.lens-card[data-framing="neutral"] .framing-badge { background: #6b7280; }
+.lens-card[data-framing="negative"] .framing-badge { background: #c0392b; }
+.lens-card[data-framing="mixed"] .framing-badge { background: #7c3aed; }
+
+.lens-card .stance {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 0 14px;
+  color: var(--text);
+}
+
+.lens-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 12px 0 6px;
+}
+.lens-section-label:first-of-type { margin-top: 0; }
+
+.loaded-terms { display: grid; gap: 10px; }
+.loaded-term { font-size: 13px; line-height: 1.4; }
+.loaded-term .term-pair { margin-bottom: 2px; }
+.loaded-term .term {
+  font-weight: 600;
+  color: #92400e;
+}
+.loaded-term .arrow { color: var(--text-subtle); margin: 0 6px; }
+.loaded-term .alternative { color: var(--text-muted); }
+.loaded-term blockquote {
+  margin: 4px 0 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 13px;
+  color: var(--text);
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
+}
+.loaded-term blockquote mark {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.sources-quoted { display: flex; flex-wrap: wrap; gap: 6px; }
+.sources-quoted .source {
+  font-size: 12px;
+  background: #f4f4ef;
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 12px;
+  color: var(--text-muted);
+}
+.sources-quoted .empty {
+  font-size: 12px;
+  color: var(--text-subtle);
+  font-style: italic;
+}
+
 @media (max-width: 720px) {
   .article { grid-template-columns: 1fr; gap: 4px; }
   .citation { grid-template-columns: 1fr; }
   .fingerprint { grid-template-columns: 1fr; }
   .fingerprint .stats { grid-template-columns: repeat(3, 1fr); }
+  .lens-cards.split-2, .lens-cards.split-3 { grid-template-columns: 1fr; }
 }
 
 @media print {
@@ -607,6 +720,90 @@ def _compute_fingerprints(
     return stats
 
 
+def _highlight_term(sentence: str, term: str) -> str:
+    if not term:
+        return _esc(sentence)
+    pattern = re.compile(re.escape(term), re.IGNORECASE)
+    parts: list[str] = []
+    last = 0
+    for m in pattern.finditer(sentence):
+        parts.append(_esc(sentence[last : m.start()]))
+        parts.append(f"<mark>{_esc(sentence[m.start() : m.end()])}</mark>")
+        last = m.end()
+    parts.append(_esc(sentence[last:]))
+    return "".join(parts)
+
+
+def _render_loaded_terms(terms: list[LoadedTerm]) -> str:
+    if not terms:
+        return (
+            '<div class="lens-section-label">Loaded terms</div>'
+            '<div class="sources-quoted"><span class="empty">none flagged</span></div>'
+        )
+    rows = []
+    for t in terms:
+        sentence_html = _highlight_term(t.in_sentence, t.term)
+        rows.append(
+            f'<div class="loaded-term">'
+            f'<div class="term-pair">'
+            f'<span class="term">{_esc(t.term)}</span>'
+            f'<span class="arrow">→</span>'
+            f'<span class="alternative">{_esc(t.neutral_alternative)}</span>'
+            f"</div>"
+            f"<blockquote>{sentence_html}</blockquote>"
+            f"</div>"
+        )
+    return (
+        f'<div class="lens-section-label">Loaded terms ({len(terms)})</div>'
+        f'<div class="loaded-terms">{"".join(rows)}</div>'
+    )
+
+
+def _render_sources(sources: list[str]) -> str:
+    if not sources:
+        return (
+            '<div class="lens-section-label">Sources quoted</div>'
+            '<div class="sources-quoted"><span class="empty">none identified</span></div>'
+        )
+    chips = "".join(f'<span class="source">{_esc(s)}</span>' for s in sources)
+    return (
+        f'<div class="lens-section-label">Sources quoted ({len(sources)})</div>'
+        f'<div class="sources-quoted">{chips}</div>'
+    )
+
+
+def _render_lens_card(lens: ArticleLens) -> str:
+    framing = lens.signals.headline_framing.value
+    return (
+        f'<article class="lens-card" data-framing="{framing}">'
+        f'<div class="head">'
+        f'<span class="outlet">{_esc(lens.outlet_domain)}</span>'
+        f'<span class="framing-badge">{_esc(_FRAMING_LABEL[lens.signals.headline_framing])}</span>'
+        f"</div>"
+        f'<p class="stance">{_esc(lens.signals.stance_summary)}</p>'
+        f"{_render_loaded_terms(lens.signals.loaded_terms)}"
+        f"{_render_sources(lens.signals.sources_quoted)}"
+        f"</article>"
+    )
+
+
+def _render_lenses(lenses: list[ArticleLens], outlet_order: list[str]) -> str:
+    by_outlet = {l.outlet_domain: l for l in lenses}
+    cards = [
+        _render_lens_card(by_outlet[outlet])
+        for outlet in outlet_order
+        if outlet in by_outlet
+    ]
+    if not cards:
+        return ""
+    cls = "lens-cards"
+    if len(cards) == 2:
+        cls += " split-2"
+    elif len(cards) == 3:
+        cls += " split-3"
+    return f'<div class="{cls}">{"".join(cards)}</div>'
+
+
 def _render_fingerprints(matrix: CoverageMatrix, outlet_order: list[str]) -> str:
     stats = _compute_fingerprints(matrix, outlet_order)
     rows = []
@@ -634,6 +831,15 @@ def render_html(matrix: CoverageMatrix) -> str:
     n_claims = len(matrix.claims)
     generated = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
+    framing_section = ""
+    if matrix.lenses:
+        framing_section = (
+            "<section>"
+            "<h2>Per-Article Framing</h2>"
+            f"{_render_lenses(matrix.lenses, outlet_order)}"
+            "</section>"
+        )
+
     body = (
         '<header class="site">'
         "<h1>News Lens — Coverage Matrix</h1>"
@@ -651,8 +857,9 @@ def render_html(matrix: CoverageMatrix) -> str:
         f"{_render_matrix(matrix, outlet_order)}"
         f"{_render_legend()}"
         "</section>"
+        f"{framing_section}"
         "<section>"
-        "<h2>Outlet Lens</h2>"
+        "<h2>Outlet Coverage Profile</h2>"
         f"{_render_fingerprints(matrix, outlet_order)}"
         "</section>"
         '<footer class="site">'

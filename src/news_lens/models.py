@@ -116,8 +116,55 @@ class TieredClaim(BaseModel):
     outlets: List[OutletCoverage]
 
 
+class HeadlineFraming(str, Enum):
+    POSITIVE = "positive"
+    NEUTRAL = "neutral"
+    NEGATIVE = "negative"
+    MIXED = "mixed"
+
+
+class LoadedTerm(BaseModel):
+    """A charged or evaluative term with a neutral alternative."""
+
+    term: str = Field(description="The loaded or charged term as used in the article.")
+    neutral_alternative: str = Field(
+        description="A neutral alternative that conveys the same meaning without the connotation."
+    )
+    in_sentence: str = Field(
+        description="The verbatim sentence from the article body containing the term."
+    )
+
+
+class LensSignals(BaseModel):
+    """Framing signals produced by the lens analyzer for one article."""
+
+    headline_framing: HeadlineFraming = Field(
+        description="How the headline and lede frame the main subject."
+    )
+    loaded_terms: List[LoadedTerm] = Field(
+        default_factory=list,
+        description="Charged or evaluative terms with neutral alternatives.",
+    )
+    sources_quoted: List[str] = Field(
+        default_factory=list,
+        description="Named sources quoted or cited in the article.",
+    )
+    stance_summary: str = Field(
+        description="One-sentence characterization of the article's overall framing."
+    )
+
+
+class ArticleLens(BaseModel):
+    """Lens signals tied to a specific article."""
+
+    article_id: str
+    outlet_domain: str
+    signals: LensSignals
+
+
 class CoverageMatrix(BaseModel):
-    """End-to-end pipeline output: articles plus tiered canonical claims."""
+    """End-to-end pipeline output: articles, tiered claims, and per-outlet lens."""
 
     articles: List[Article]
     claims: List[TieredClaim]
+    lenses: List[ArticleLens] = Field(default_factory=list)
