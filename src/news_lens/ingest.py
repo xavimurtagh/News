@@ -23,6 +23,10 @@ def _outlet_domain(url: str) -> str:
     return netloc
 
 
+def _paragraph_count(body: str) -> int:
+    return max(1, sum(1 for p in body.split("\n\n") if p.strip()))
+
+
 def fetch_article(url: str) -> Article:
     """Fetch a URL and return a parsed Article. Raises ValueError on failure."""
     raw_html = trafilatura.fetch_url(url)
@@ -61,4 +65,5 @@ def fetch_article(url: str) -> Article:
         published_at=published_at,
         fetched_at=datetime.now(timezone.utc),
         body=body,
+        paragraph_count=_paragraph_count(body),
     )

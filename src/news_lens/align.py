@@ -39,7 +39,7 @@ For each canonical claim, classify EVERY article's handling as one of:
 Rules:
 - Two claims are the same canonical claim if they assert the same fact about the same entities, even if phrased differently. Differences in time, place, subject, or predicate make them DIFFERENT canonical claims.
 - "X said Y" in one article and "Y is true" in another describe the SAME proposition but DIFFERENT statuses (attributed vs asserted). Group them as ONE canonical claim with different statuses per outlet.
-- For "asserted", "attributed", or "contradicted" entries, copy `source_quote` and `attributed_to` verbatim from the corresponding input claim. Do not paraphrase.
+- For "asserted", "attributed", or "contradicted" entries, copy `source_quote`, `attributed_to`, and `position` verbatim from the corresponding input claim. Do not paraphrase or recompute. For "omitted" entries, set `position` to null.
 - `canonical_text` should be a neutral phrasing that abstracts away outlet-specific framing. Avoid loaded language. Strip judgmental adjectives.
 - Do not invent claims that do not appear in any article.
 - Focus on factual claims. Skip pure interpretation or background unless multiple outlets emphasize them.

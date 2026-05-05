@@ -52,6 +52,7 @@ class Article(BaseModel):
     published_at: Optional[datetime] = None
     fetched_at: datetime
     body: str
+    paragraph_count: int = 0
 
 
 class ExtractedClaim(BaseModel):
@@ -90,6 +91,10 @@ class OutletCoverage(BaseModel):
     status: CoverageStatus
     source_quote: Optional[str] = None
     attributed_to: Optional[str] = None
+    position: Optional[int] = Field(
+        default=None,
+        description="1-indexed paragraph position from the source article. Null when omitted.",
+    )
 
 
 class CanonicalClaim(BaseModel):

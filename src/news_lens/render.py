@@ -365,6 +365,13 @@ details.claim .canonical {
   font-size: 12px;
   color: var(--text-muted);
 }
+.citation .position-label {
+  font-size: 11px;
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+  margin-left: 6px;
+  white-space: nowrap;
+}
 
 .legend {
   display: flex;
@@ -592,7 +599,21 @@ def _render_cells(claim: TieredClaim, outlet_order: list[str]) -> str:
     return "".join(cells)
 
 
-def _render_citations(claim: TieredClaim, outlet_order: list[str]) -> str:
+def _position_label(position: int | None, total: int) -> str:
+    if position is None or position <= 0:
+        return ""
+    if total <= 0:
+        return f"¶ {position}"
+    third = max(1.0, total / 3)
+    band = "early" if position <= third else "middle" if position <= 2 * third else "late"
+    return f"¶ {position}/{total} · {band}"
+
+
+def _render_citations(
+    claim: TieredClaim,
+    outlet_order: list[str],
+    articles_by_id: dict[str, Article],
+) -> str:
     by_outlet = _coverage_by_outlet(claim.outlets)
     parts = []
     for outlet in outlet_order:
@@ -613,11 +634,20 @@ def _render_citations(claim: TieredClaim, outlet_order: list[str]) -> str:
                 f'<span class="attributed-to">attributed to '
                 f"{_esc(cov.attributed_to)}</span>"
             )
+        position_html = ""
+        article = articles_by_id.get(cov.article_id)
+        if article and cov.position:
+            label = _position_label(cov.position, article.paragraph_count)
+            if label:
+                position_html = (
+                    f' <span class="position-label">{_esc(label)}</span>'
+                )
         parts.append(
             f'<div class="citation">'
             f'<div class="outlet-cell">'
             f'<span>{_esc(outlet)}</span>'
             f'<span class="status-pill {status_cls}">{_esc(status_label)}</span>'
+            f"{position_html}"
             f"</div>"
             f"<div>{quote_html}{attr_html}</div>"
             f"</div>"
@@ -625,7 +655,11 @@ def _render_citations(claim: TieredClaim, outlet_order: list[str]) -> str:
     return f'<div class="citations">{"".join(parts)}</div>'
 
 
-def _render_claim(claim: TieredClaim, outlet_order: list[str]) -> str:
+def _render_claim(
+    claim: TieredClaim,
+    outlet_order: list[str],
+    articles_by_id: dict[str, Article],
+) -> str:
     grid = _grid_template(len(outlet_order))
     cells = _render_cells(claim, outlet_order)
     return (
@@ -634,15 +668,18 @@ def _render_claim(claim: TieredClaim, outlet_order: list[str]) -> str:
         f'<span class="canonical">{_esc(claim.canonical_text)}</span>'
         f"{cells}"
         f"</summary>"
-        f"{_render_citations(claim, outlet_order)}"
+        f"{_render_citations(claim, outlet_order, articles_by_id)}"
         f"</details>"
     )
 
 
 def _render_tier_section(
-    tier: ConsensusTier, claims: list[TieredClaim], outlet_order: list[str]
+    tier: ConsensusTier,
+    claims: list[TieredClaim],
+    outlet_order: list[str],
+    articles_by_id: dict[str, Article],
 ) -> str:
-    rows = "".join(_render_claim(c, outlet_order) for c in claims)
+    rows = "".join(_render_claim(c, outlet_order, articles_by_id) for c in claims)
     return (
         f'<details class="tier" data-tier="{tier.value}" open>'
         f"<summary>"
@@ -660,10 +697,13 @@ def _render_matrix(matrix: CoverageMatrix, outlet_order: list[str]) -> str:
     for c in matrix.claims:
         by_tier[c.tier].append(c)
 
+    articles_by_id = {a.id: a for a in matrix.articles}
     sections = []
     for tier in _TIER_ORDER:
         if tier in by_tier:
-            sections.append(_render_tier_section(tier, by_tier[tier], outlet_order))
+            sections.append(
+                _render_tier_section(tier, by_tier[tier], outlet_order, articles_by_id)
+            )
     return f'<div class="matrix-frame">{_render_matrix_head(outlet_order)}{"".join(sections)}</div>'
 
 
