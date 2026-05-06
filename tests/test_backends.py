@@ -85,3 +85,22 @@ def test_openai_compatible_import_guard():
         assert "instructor" in str(e)
         return
     raise AssertionError("expected ImportError")
+
+
+def test_is_connection_error_recognizes_message():
+    """Bare connection-related strings still classify, even when the SDK isn't available."""
+    from news_lens.backends.openai_compatible import _is_connection_error
+
+    assert _is_connection_error(Exception("Connection error."))
+    assert _is_connection_error(ConnectionRefusedError("nope"))
+    assert not _is_connection_error(ValueError("unrelated"))
+
+
+def test_is_connection_error_walks_cause_chain():
+    """Wrapped exceptions still match — instructor wraps openai wraps httpx."""
+    from news_lens.backends.openai_compatible import _is_connection_error
+
+    inner = Exception("Connection error.")
+    outer = ValueError("retry exhausted")
+    outer.__cause__ = inner
+    assert _is_connection_error(outer)

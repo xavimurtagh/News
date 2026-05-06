@@ -93,6 +93,7 @@ class OpenAICompatibleBackend:
         self._client = instructor.from_openai(
             AsyncOpenAI(base_url=base_url, api_key=api_key)
         )
+        self._base_url = base_url
         self.model = model
         self.max_tokens = max_tokens
         self.temperature = temperature
@@ -100,14 +101,48 @@ class OpenAICompatibleBackend:
         self.name = f"openai:{base_url}:{model}"
 
     async def parse(self, *, system: str, user: str, schema: type[T]) -> T:
-        return await self._client.chat.completions.create(
-            model=self.model,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-            max_retries=self.max_retries,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            response_model=schema,
-        )
+        try:
+            return await self._client.chat.completions.create(
+                model=self.model,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+                max_retries=self.max_retries,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                response_model=schema,
+            )
+        except Exception as e:
+            if _is_connection_error(e):
+                raise ConnectionError(
+                    f"Could not reach LLM server at {self._base_url}. "
+                    "Is Ollama (or your local LLM server) running? "
+                    "Start Ollama with `ollama serve` in another terminal, "
+                    "or pull a model with `ollama pull " + self.model + "`."
+                ) from e
+            raise
+
+
+_CONNECTION_ERROR_NAMES = {
+    "APIConnectionError",
+    "ConnectError",
+    "ConnectTimeout",
+    "ReadTimeout",
+    "RemoteProtocolError",
+}
+
+
+def _is_connection_error(exc: BaseException) -> bool:
+    """Recognize connection failures across instructor / openai / httpx layers."""
+    seen: set[int] = set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        if isinstance(exc, (ConnectionError, TimeoutError)):
+            return True
+        if type(exc).__name__ in _CONNECTION_ERROR_NAMES:
+            return True
+        if "Connection error" in str(exc):
+            return True
+        exc = exc.__cause__ or exc.__context__
+    return False

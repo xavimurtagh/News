@@ -1,16 +1,32 @@
 """CLI entry point.
 
-Usage:
-    python -m news_lens URL1 URL2 [URL3 ...]
-    python -m news_lens --urls-file path/to/urls.txt
-    python -m news_lens URL1 URL2 --output coverage.json
-    python -m news_lens URL1 --backend openai-compatible \\
-        --base-url http://localhost:11434/v1 --model llama3.1:8b
+Examples
+--------
 
-Backend defaults to Claude (requires ANTHROPIC_API_KEY in env).
-For self-hosted alternatives (Ollama, vLLM, Groq, OpenRouter, ...) use
---backend openai-compatible with --base-url and --model. See
-news_lens/backends/__init__.py for the full migration guide.
+Claude (default; requires ANTHROPIC_API_KEY):
+    python -m news_lens URL1 URL2 URL3 --html out.html
+
+Local Llama via Ollama (zero subscriptions, runs on your machine):
+    1. Install: `bash scripts/setup_local.sh`  (or see scripts/setup_local.sh)
+    2. Run:     python -m news_lens URL1 URL2 URL3 --ollama --html out.html
+
+The `--ollama` flag is shorthand for:
+    --backend openai-compatible --base-url http://localhost:11434/v1
+The default model is llama3.2:3b (~2GB RAM, runs anywhere).
+
+For larger machines / better quality, override:
+    python -m news_lens URL1 URL2 URL3 --ollama --model llama3.1:8b   # ~5GB RAM
+    python -m news_lens URL1 URL2 URL3 --ollama --model qwen2.5:14b   # ~9GB RAM
+
+Hosted-but-not-Claude (e.g. Groq's free tier):
+    python -m news_lens URL1 URL2 URL3 \\
+        --backend openai-compatible \\
+        --base-url https://api.groq.com/openai/v1 \\
+        --model llama-3.1-70b-versatile \\
+        --api-key-env GROQ_API_KEY
+
+Migration strategy and longer-term self-hosting paths are documented in
+news_lens/backends/__init__.py.
 """
 
 from __future__ import annotations
@@ -24,12 +40,29 @@ from .pipeline import run_pipeline
 from .render import render_html
 
 
+_OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434/v1"
+_OLLAMA_DEFAULT_MODEL = "llama3.2:3b"
+
+
 def _build_backend(args: argparse.Namespace):
+    # --ollama is a shortcut for openai-compatible against a local Ollama.
+    if args.ollama:
+        args.backend = "openai-compatible"
+        if not args.base_url:
+            args.base_url = _OLLAMA_DEFAULT_BASE_URL
+        if not args.model:
+            args.model = _OLLAMA_DEFAULT_MODEL
+
     if args.backend == "claude":
         import anthropic
 
         from .backends.claude import ClaudeBackend
 
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            raise SystemExit(
+                "error: ANTHROPIC_API_KEY is not set. Either export it or "
+                "use --ollama for a local LLM (see scripts/setup_local.sh)."
+            )
         return ClaudeBackend(
             client=anthropic.AsyncAnthropic(
                 api_key=os.environ.get("ANTHROPIC_API_KEY")
@@ -40,7 +73,8 @@ def _build_backend(args: argparse.Namespace):
     if args.backend == "openai-compatible":
         if not args.base_url:
             raise SystemExit(
-                "error: --backend openai-compatible requires --base-url"
+                "error: --backend openai-compatible requires --base-url "
+                "(or use --ollama for local Ollama at localhost:11434)"
             )
         if not args.model:
             raise SystemExit(
@@ -101,6 +135,13 @@ def main() -> int:
         help='LLM backend (default: claude). Use "openai-compatible" for '
         "any OpenAI-API-compatible server (Ollama, vLLM, Groq, OpenRouter, "
         "LM Studio, ...).",
+    )
+    parser.add_argument(
+        "--ollama",
+        action="store_true",
+        help="Shortcut for --backend openai-compatible --base-url "
+        f"{_OLLAMA_DEFAULT_BASE_URL} with default model "
+        f"{_OLLAMA_DEFAULT_MODEL}. Override the model with --model.",
     )
     parser.add_argument(
         "--base-url",
