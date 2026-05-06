@@ -146,9 +146,19 @@ def test_render_includes_expected_sections():
     html_doc = render_html(_matrix())
     assert "<h1>News Lens — Coverage Matrix</h1>" in html_doc
     assert "Articles" in html_doc
+    assert "Story at a Glance" in html_doc
     assert "Coverage Matrix" in html_doc
     assert "Per-Article Framing" in html_doc
     assert "Outlet Coverage Profile" in html_doc
+
+
+def test_summary_groups_by_tier():
+    html_doc = render_html(_matrix())
+    # The synthetic _matrix has a single universal claim.
+    assert "What every outlet agreed on" in html_doc
+    assert "summary-tier" in html_doc
+    # Ensure the canonical text appears in the summary section, not just the matrix.
+    assert html_doc.count("Something happened.") >= 2  # summary + matrix
 
 
 def test_render_omits_framing_section_when_no_lenses():

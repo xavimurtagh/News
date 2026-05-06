@@ -87,6 +87,14 @@ _FRAMING_LABEL = {
     HeadlineFraming.MIXED: "Mixed framing",
 }
 
+_SUMMARY_HEADINGS = {
+    ConsensusTier.UNIVERSAL: "What every outlet agreed on",
+    ConsensusTier.MAJORITY: "What most outlets agreed on",
+    ConsensusTier.DISPUTED: "Where outlets disagreed",
+    ConsensusTier.ATTRIBUTED_ONLY: "Quoted positions only — no outlet asserted as fact",
+    ConsensusTier.SINGLE_SOURCED: "One-outlet exclusives",
+}
+
 
 def _outlet_order(articles: list[Article]) -> list[str]:
     seen: set[str] = set()
@@ -510,6 +518,49 @@ footer.site {
   color: var(--text-subtle);
 }
 
+.summary {
+  display: grid;
+  gap: 14px;
+}
+.summary-tier {
+  border-left: 3px solid var(--border-strong);
+  padding-left: 14px;
+}
+.summary-tier[data-tier="universal"] { border-left-color: var(--tier-universal); }
+.summary-tier[data-tier="majority"] { border-left-color: var(--tier-majority); }
+.summary-tier[data-tier="disputed"] { border-left-color: var(--tier-disputed); }
+.summary-tier[data-tier="attributed_only"] { border-left-color: var(--tier-attributed); }
+.summary-tier[data-tier="single_sourced"] { border-left-color: var(--tier-single); }
+.summary-tier h3 {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 6px;
+  color: var(--text-muted);
+}
+.summary-tier ul { margin: 0; padding: 0; list-style: none; }
+.summary-tier li {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 3px 0;
+  display: flex;
+  gap: 8px;
+}
+.summary-tier li::before {
+  content: "•";
+  color: var(--text-subtle);
+  font-family: -apple-system, system-ui, sans-serif;
+  flex-shrink: 0;
+}
+.summary-tier .source-attr {
+  font-family: -apple-system, system-ui, sans-serif;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .lens-cards {
   display: grid;
   gap: 14px;
@@ -881,6 +932,58 @@ def _render_matrix(matrix: CoverageMatrix, outlet_order: list[str]) -> str:
     return f'<div class="matrix-frame">{_render_matrix_head(outlet_order)}{"".join(sections)}</div>'
 
 
+def _render_summary(matrix: CoverageMatrix) -> str:
+    if not matrix.claims:
+        return ""
+
+    by_tier: dict[ConsensusTier, list[TieredClaim]] = defaultdict(list)
+    for c in matrix.claims:
+        by_tier[c.tier].append(c)
+
+    sections = []
+    for tier in _TIER_ORDER:
+        claims = by_tier.get(tier, [])
+        if not claims:
+            continue
+        bullets = []
+        for c in claims:
+            attr_html = ""
+            if tier == ConsensusTier.SINGLE_SOURCED:
+                # Identify the one outlet that has this claim
+                for cov in c.outlets:
+                    if cov.status != CoverageStatus.OMITTED:
+                        attr_html = (
+                            f' <span class="source-attr">— '
+                            f"{_esc(_outlet_display_name(cov.outlet_domain))}"
+                            f"</span>"
+                        )
+                        break
+            elif tier == ConsensusTier.ATTRIBUTED_ONLY:
+                # List the named sources behind the claim
+                attributors: list[str] = []
+                for cov in c.outlets:
+                    if cov.status == CoverageStatus.ATTRIBUTED and cov.attributed_to:
+                        if cov.attributed_to not in attributors:
+                            attributors.append(cov.attributed_to)
+                if attributors:
+                    attr_html = (
+                        f' <span class="source-attr">— attributed to '
+                        f"{_esc(', '.join(attributors))}"
+                        f"</span>"
+                    )
+            bullets.append(
+                f"<li><span>{_esc(c.canonical_text)}{attr_html}</span></li>"
+            )
+        sections.append(
+            f'<div class="summary-tier" data-tier="{tier.value}">'
+            f"<h3>{_esc(_SUMMARY_HEADINGS[tier])}</h3>"
+            f'<ul>{"".join(bullets)}</ul>'
+            f"</div>"
+        )
+
+    return f'<div class="summary">{"".join(sections)}</div>'
+
+
 def _render_legend() -> str:
     items = []
     for status in (
@@ -1087,6 +1190,10 @@ def render_html(matrix: CoverageMatrix) -> str:
         "<section>"
         "<h2>Articles</h2>"
         f"{_render_articles(matrix.articles, outlet_order, matrix.syndication_groups, matrix.lenses)}"
+        "</section>"
+        "<section>"
+        "<h2>Story at a Glance</h2>"
+        f"{_render_summary(matrix)}"
         "</section>"
         "<section>"
         "<h2>Coverage Matrix</h2>"
