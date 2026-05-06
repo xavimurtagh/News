@@ -675,6 +675,78 @@ footer.site {
   details { break-inside: avoid; }
   details[open] > summary { background: white; }
 }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a18;
+    --surface: #232320;
+    --border: #3a3a35;
+    --border-strong: #4d4d47;
+    --text: #ededeb;
+    --text-muted: #b0b0a8;
+    --text-subtle: #828278;
+    --accent: #7aa3d8;
+
+    --tier-universal: #4ade80;
+    --tier-majority: #84cc16;
+    --tier-disputed: #f87171;
+    --tier-attributed: #fbbf24;
+    --tier-single: #a78bfa;
+
+    --status-asserted-bg: #1d3a25;
+    --status-asserted-fg: #4ade80;
+    --status-attributed-bg: #3d2e0c;
+    --status-attributed-fg: #fbbf24;
+    --status-contradicted-bg: #3d1816;
+    --status-contradicted-fg: #f87171;
+    --status-omitted-bg: #2a2a26;
+    --status-omitted-fg: #6a6a64;
+  }
+
+  .matrix-head { background: #2a2a26; }
+  details.tier > summary { background: #232320; }
+  details.claim > summary:hover { background: #2a2a26; }
+  .citations { background: #1d1d1a; }
+
+  .lens-card[data-framing="positive"] { border-left-color: #60a5fa; }
+  .lens-card[data-framing="neutral"] { border-left-color: #9ca3af; }
+  .lens-card[data-framing="negative"] { border-left-color: #f87171; }
+  .lens-card[data-framing="mixed"] { border-left-color: #a78bfa; }
+  .lens-card[data-framing="positive"] .framing-badge { background: #2563eb; }
+  .lens-card[data-framing="neutral"] .framing-badge { background: #4b5563; }
+  .lens-card[data-framing="negative"] .framing-badge { background: #b91c1c; }
+  .lens-card[data-framing="mixed"] .framing-badge { background: #6d28d9; }
+
+  .article-framing-badge[data-framing="positive"] { background: #2563eb; }
+  .article-framing-badge[data-framing="neutral"] { background: #4b5563; }
+  .article-framing-badge[data-framing="negative"] { background: #b91c1c; }
+  .article-framing-badge[data-framing="mixed"] { background: #6d28d9; }
+
+  .citation[data-framing="positive"] { border-left-color: #60a5fa; }
+  .citation[data-framing="neutral"] { border-left-color: #9ca3af; }
+  .citation[data-framing="negative"] { border-left-color: #f87171; }
+  .citation[data-framing="mixed"] { border-left-color: #a78bfa; }
+  .citation[data-framing="positive"] .framing-pill { background: #2563eb; }
+  .citation[data-framing="neutral"] .framing-pill { background: #4b5563; }
+  .citation[data-framing="negative"] .framing-pill { background: #b91c1c; }
+  .citation[data-framing="mixed"] .framing-pill { background: #6d28d9; }
+
+  .syndication-badge {
+    background: #1e1b4b;
+    color: #c7d2fe;
+    border-color: #312e81;
+  }
+
+  .loaded-term .term { color: #fbbf24; }
+  .loaded-term blockquote mark,
+  .citation blockquote mark {
+    background: #3d2e0c;
+    color: #fbbf24;
+  }
+  .sources-quoted .source { background: #2a2a26; }
+
+  .summary-tier li::before { color: var(--text-subtle); }
+}
 """
 
 
