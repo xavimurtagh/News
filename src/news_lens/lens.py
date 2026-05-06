@@ -1,10 +1,39 @@
-"""Per-article framing analysis using Claude.
+"""Per-article framing analysis via a structured-output LLM.
 
 Surfaces signals that may differ across outlets covering the same story:
-headline framing, loaded vocabulary, source diversity, stance. The point is
-to make framing visible alongside the facts — not to label any outlet good
-or bad. Every loaded term carries a verbatim citation so a reader can check
-the call.
+headline framing, loaded vocabulary, source diversity, stance.
+
+The model is provided as a `StructuredLLM` backend (Claude / local
+Llama / etc.) — see backends/.
+
+Migration path away from an LLM
+-------------------------------
+
+LLMs are overkill for this task. A specialised pipeline gives equal or
+better quality at a fraction of the cost and latency:
+
+- `headline_framing` → fine-tune DistilRoBERTa on news headline
+  sentiment (positive / neutral / negative). The
+  `mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis`
+  model is a starting point; better to fine-tune on a political-news
+  set since financial-news framing differs.
+- `loaded_terms` → maintain a paired-term lexicon
+  (regime↔government, scheme↔plan, sweeping↔broad, …) and dictionary-
+  match. Augment with a sentiment classifier scoring noun/adjective
+  candidates against a Reuters wire baseline. The current LLM
+  sometimes invents pairings; a curated lexicon is auditable and
+  consistent.
+- `sources_quoted` → spaCy NER (PERSON / ORG) with a dependency-parse
+  filter for entities adjacent to reporting verbs (said, told,
+  according-to). spaCy's `en_core_web_trf` is accurate enough for
+  most news prose.
+- `stance_summary` → a short LLM call OR an extractive 1-sentence
+  summary (the article's lede sentence is a decent proxy).
+
+A `ClassicalLensBackend` would expose `analyze_lens(article) ->
+ArticleLens` with the same shape this module returns. Wire it in as a
+sibling of the StructuredLLM-based path; the cache key already
+namespaces by backend name.
 """
 
 from __future__ import annotations
@@ -12,13 +41,10 @@ from __future__ import annotations
 import hashlib
 import sys
 
-import anthropic
-
+from .backends.base import StructuredLLM
 from .cache import Cache
 from .models import Article, ArticleLens, LensSignals, LoadedTerm
 
-
-_MODEL = "claude-opus-4-7"
 
 _SYSTEM_PROMPT = """\
 You are a media analyst examining how a single article framed its subject. Your goal is to surface framing signals that may differ across outlets covering the same story — not to label the article good or bad.
@@ -54,13 +80,15 @@ Rules:
 """
 
 
+_PROMPT_HASH = hashlib.sha256(_SYSTEM_PROMPT.encode("utf-8")).hexdigest()[:12]
+
+
 async def analyze_lens(
     article: Article,
-    client: anthropic.AsyncAnthropic,
+    llm: StructuredLLM,
     cache: Cache,
 ) -> ArticleLens:
-    prompt_hash = hashlib.sha256(_SYSTEM_PROMPT.encode("utf-8")).hexdigest()[:12]
-    cached = cache.get("lenses", article.id, prompt_hash)
+    cached = cache.get("lenses", article.id, _PROMPT_HASH, llm.name)
     if cached is not None:
         return ArticleLens.model_validate(cached)
 
@@ -70,21 +98,9 @@ async def analyze_lens(
         f"Article body:\n---\n{article.body}\n---"
     )
 
-    response = await client.messages.parse(
-        model=_MODEL,
-        max_tokens=8000,
-        thinking={"type": "adaptive"},
-        output_config={"effort": "high"},
-        system=_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_text}],
-        output_format=LensSignals,
+    signals = await llm.parse(
+        system=_SYSTEM_PROMPT, user=user_text, schema=LensSignals
     )
-
-    signals = response.parsed_output
-    if signals is None:
-        raise RuntimeError(
-            f"Lens analysis returned no parseable output for {article.url}"
-        )
 
     valid_terms: list[LoadedTerm] = []
     for term in signals.loaded_terms:
@@ -109,5 +125,5 @@ async def analyze_lens(
         outlet_domain=article.outlet_domain,
         signals=cleaned,
     )
-    cache.set("lenses", lens.model_dump(mode="json"), article.id, prompt_hash)
+    cache.set("lenses", lens.model_dump(mode="json"), article.id, _PROMPT_HASH, llm.name)
     return lens

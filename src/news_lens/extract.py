@@ -1,10 +1,15 @@
-"""Extract atomic claims from a single article using Claude.
+"""Extract atomic claims from a single article via a structured-output LLM.
+
+The LLM is provided as a `StructuredLLM` backend (see backends/), so this
+module is agnostic to whether the call goes to Claude, a local Llama, or
+anything else with a Pydantic-validated structured-output interface.
 
 Each claim must cite a verbatim span from the article body. The post-call
-filter drops any claim whose `source_quote` is not a substring of the body —
-this guards against the model paraphrasing the citation, which would silently
-break the "every fact links back to a sentence" invariant the product
-depends on.
+filter drops any claim whose `source_quote` is not a substring of the
+body — this guards against the model paraphrasing the citation, which
+would silently break the "every fact links back to a sentence" invariant
+the product depends on. The guard matters even more on weaker models
+where citation drift is more frequent.
 """
 
 from __future__ import annotations
@@ -12,13 +17,10 @@ from __future__ import annotations
 import hashlib
 import sys
 
-import anthropic
-
+from .backends.base import StructuredLLM
 from .cache import Cache
 from .models import Article, ExtractedClaim, ExtractionResult
 
-
-_MODEL = "claude-opus-4-7"
 
 _SYSTEM_PROMPT = """\
 You are a careful news analyst extracting atomic factual claims from news articles. Your job is to identify discrete claims, classify each by how the article presents it, and link each claim back to the exact sentence(s) in the source.
@@ -46,13 +48,15 @@ Rules:
 """
 
 
+_PROMPT_HASH = hashlib.sha256(_SYSTEM_PROMPT.encode("utf-8")).hexdigest()[:12]
+
+
 async def extract_claims(
     article: Article,
-    client: anthropic.AsyncAnthropic,
+    llm: StructuredLLM,
     cache: Cache,
 ) -> ExtractionResult:
-    prompt_hash = hashlib.sha256(_SYSTEM_PROMPT.encode("utf-8")).hexdigest()[:12]
-    cached = cache.get("extractions", article.id, prompt_hash)
+    cached = cache.get("extractions", article.id, _PROMPT_HASH, llm.name)
     if cached is not None:
         return ExtractionResult.model_validate(cached)
 
@@ -63,21 +67,9 @@ async def extract_claims(
         f"Article body:\n---\n{article.body}\n---"
     )
 
-    response = await client.messages.parse(
-        model=_MODEL,
-        max_tokens=16000,
-        thinking={"type": "adaptive"},
-        output_config={"effort": "high"},
-        system=_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_text}],
-        output_format=ExtractionResult,
+    parsed = await llm.parse(
+        system=_SYSTEM_PROMPT, user=user_text, schema=ExtractionResult
     )
-
-    parsed = response.parsed_output
-    if parsed is None:
-        raise RuntimeError(
-            f"Claim extraction returned no parseable output for {article.url}"
-        )
 
     valid: list[ExtractedClaim] = []
     for claim in parsed.claims:
@@ -91,5 +83,7 @@ async def extract_claims(
             )
 
     result = ExtractionResult(claims=valid)
-    cache.set("extractions", result.model_dump(mode="json"), article.id, prompt_hash)
+    cache.set(
+        "extractions", result.model_dump(mode="json"), article.id, _PROMPT_HASH, llm.name
+    )
     return result

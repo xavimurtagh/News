@@ -1,9 +1,42 @@
 """Align claims across articles into canonical claims with per-outlet status.
 
 Two extracted claims that describe the same underlying proposition collapse
-into one canonical claim — even when one article asserts it and another only
-attributes it to a source. The per-outlet status preserves that difference
-without losing that they refer to the same fact.
+into one canonical claim — even when one article asserts it and another
+only attributes it to a source. The per-outlet status preserves that
+difference without losing that they refer to the same fact.
+
+The model is provided as a `StructuredLLM` backend (Claude / local Llama
+/ etc.) — see backends/.
+
+Migration path away from an LLM
+-------------------------------
+
+Cross-article alignment is a textbook semantic-equivalence problem and
+should not be an LLM call in a production self-hosted setup. The classical
+two-stage pipeline gives equal-or-better quality, runs in milliseconds per
+pair, and is much easier to tune and validate:
+
+1. **Candidate generation** — embed every extracted claim with
+   `sentence-transformers/all-mpnet-base-v2` (or `paraphrase-multilingual-mpnet-base-v2`
+   for non-English coverage). Compute pairwise cosine similarity between
+   claims from different articles. Keep pairs above a threshold (~0.7) as
+   candidate equivalences.
+
+2. **Verification** — run a DeBERTa-v3 NLI cross-encoder
+   (`cross-encoder/nli-deberta-v3-large` or similar) on each candidate
+   pair to classify the relationship: entailment, contradiction, neutral.
+   Bidirectional entailment → same canonical claim. One-direction → one
+   is stronger; pick the more general phrasing. Contradiction → DISPUTED.
+
+3. **Clustering** — connect transitive entailment edges with union-find.
+   Each connected component is a canonical claim. The status per outlet
+   maps from the input claim's claim_type (asserted vs attributed).
+
+A `ClassicalAlignmentBackend` would expose `align_claims(articles,
+extractions) -> AlignmentResult` matching this module's signature. The
+cache namespacing already includes the backend name so a classical
+backend's outputs stay separate from any LLM-cached results, which makes
+A/B comparisons easy.
 """
 
 from __future__ import annotations
@@ -12,8 +45,7 @@ import hashlib
 import json
 from typing import Mapping
 
-import anthropic
-
+from .backends.base import StructuredLLM
 from .cache import Cache
 from .models import (
     AlignmentResult,
@@ -24,8 +56,6 @@ from .models import (
     OutletCoverage,
 )
 
-
-_MODEL = "claude-opus-4-7"
 
 _SYSTEM_PROMPT = """\
 You are a media analyst comparing how multiple outlets covered the same story. You will receive factual claims extracted from each article. Your job is to identify canonical claims across articles and document how each outlet handled each one.
@@ -48,10 +78,13 @@ Rules:
 """
 
 
+_PROMPT_HASH = hashlib.sha256(_SYSTEM_PROMPT.encode("utf-8")).hexdigest()[:12]
+
+
 async def align_claims(
     articles: list[Article],
     extractions: Mapping[str, ExtractionResult],
-    client: anthropic.AsyncAnthropic,
+    llm: StructuredLLM,
     cache: Cache,
 ) -> AlignmentResult:
     payload_obj = {
@@ -68,25 +101,14 @@ async def align_claims(
     }
     payload = json.dumps(payload_obj, indent=2)
 
-    prompt_hash = hashlib.sha256(_SYSTEM_PROMPT.encode("utf-8")).hexdigest()[:12]
     payload_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
-    cached = cache.get("alignments", payload_hash, prompt_hash)
+    cached = cache.get("alignments", payload_hash, _PROMPT_HASH, llm.name)
     if cached is not None:
         return AlignmentResult.model_validate(cached)
 
-    response = await client.messages.parse(
-        model=_MODEL,
-        max_tokens=16000,
-        thinking={"type": "adaptive"},
-        output_config={"effort": "high"},
-        system=_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": payload}],
-        output_format=AlignmentResult,
+    parsed = await llm.parse(
+        system=_SYSTEM_PROMPT, user=payload, schema=AlignmentResult
     )
-
-    parsed = response.parsed_output
-    if parsed is None:
-        raise RuntimeError("Alignment returned no parseable output")
 
     article_ids = [a.id for a in articles]
     article_to_outlet = {a.id: a.outlet_domain for a in articles}
@@ -107,5 +129,5 @@ async def align_claims(
         filled.append(CanonicalClaim(canonical_text=cc.canonical_text, outlets=outlets))
 
     result = AlignmentResult(canonical_claims=filled)
-    cache.set("alignments", result.model_dump(mode="json"), payload_hash, prompt_hash)
+    cache.set("alignments", result.model_dump(mode="json"), payload_hash, _PROMPT_HASH, llm.name)
     return result

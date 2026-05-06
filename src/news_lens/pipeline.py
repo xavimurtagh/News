@@ -5,8 +5,11 @@ Concurrency model:
 - Per article, claim extraction and lens analysis run in parallel.
 - Cross-article alignment is sequential (depends on every extraction).
 
-`run_pipeline` is the sync entrypoint and calls asyncio.run on the coroutine,
-so callers don't need to know about the event loop.
+The LLM is provided as a `StructuredLLM` backend (Claude / local Llama /
+etc.) — the pipeline doesn't care which. See backends/.
+
+`run_pipeline` is the sync entrypoint and calls asyncio.run on the
+coroutine, so callers don't need to know about the event loop.
 """
 
 from __future__ import annotations
@@ -16,9 +19,8 @@ import os
 import sys
 from pathlib import Path
 
-import anthropic
-
 from .align import align_claims
+from .backends.base import StructuredLLM
 from .cache import Cache
 from .extract import extract_claims
 from .ingest import fetch_article
@@ -132,13 +134,13 @@ def _partition_results(
 
 async def _analyze_article(
     article: Article,
-    client: anthropic.AsyncAnthropic,
+    llm: StructuredLLM,
     cache: Cache,
 ) -> tuple[ExtractionResult, ArticleLens]:
     print(f"[{article.outlet_domain}] analyzing", file=sys.stderr)
     extraction, lens = await asyncio.gather(
-        extract_claims(article, client, cache),
-        analyze_lens(article, client, cache),
+        extract_claims(article, llm, cache),
+        analyze_lens(article, llm, cache),
     )
     print(
         f"[{article.outlet_domain}] {len(extraction.claims)} claims, "
@@ -150,7 +152,7 @@ async def _analyze_article(
 
 async def _run_async(
     urls: list[str],
-    client: anthropic.AsyncAnthropic,
+    llm: StructuredLLM,
     cache: Cache,
 ) -> CoverageMatrix:
     print(f"Fetching {len(urls)} article(s)", file=sys.stderr)
@@ -163,7 +165,7 @@ async def _run_async(
         raise RuntimeError("All article fetches failed; nothing to analyze.")
 
     analysis_results = await asyncio.gather(
-        *[_analyze_article(a, client, cache) for a in articles],
+        *[_analyze_article(a, llm, cache) for a in articles],
         return_exceptions=True,
     )
     surviving, ext_lens_pairs = _partition_results(
@@ -189,7 +191,7 @@ async def _run_async(
         )
 
     print(f"Aligning claims across {len(articles)} article(s)", file=sys.stderr)
-    alignment = await align_claims(articles, extractions, client, cache)
+    alignment = await align_claims(articles, extractions, llm, cache)
     print(
         f"  -> {len(alignment.canonical_claims)} canonical claims",
         file=sys.stderr,
@@ -215,11 +217,25 @@ async def _run_async(
 
 def run_pipeline(
     urls: list[str],
+    backend: StructuredLLM | None = None,
     cache_dir: Path | None = None,
     api_key: str | None = None,
 ) -> CoverageMatrix:
+    """Run the pipeline end-to-end.
+
+    `backend` is any StructuredLLM (see news_lens.backends). If None,
+    constructs a ClaudeBackend using ANTHROPIC_API_KEY (compatible with
+    the original behavior).
+    """
     cache = Cache(cache_dir or Path(".cache"))
-    client = anthropic.AsyncAnthropic(
-        api_key=api_key or os.environ.get("ANTHROPIC_API_KEY")
-    )
-    return asyncio.run(_run_async(urls, client, cache))
+    if backend is None:
+        import anthropic
+
+        from .backends.claude import ClaudeBackend
+
+        backend = ClaudeBackend(
+            client=anthropic.AsyncAnthropic(
+                api_key=api_key or os.environ.get("ANTHROPIC_API_KEY")
+            )
+        )
+    return asyncio.run(_run_async(urls, backend, cache))
