@@ -109,6 +109,27 @@ _TIER_ORDER = {
 }
 
 
+def _partition_results(
+    items: list,
+    results: list,
+    label_fn=str,
+) -> tuple[list, list]:
+    """Drop exceptions from an asyncio.gather(return_exceptions=True) result.
+
+    Returns (surviving_items, surviving_results) where the two lists stay
+    aligned. Failed items get a warning line on stderr keyed off label_fn.
+    """
+    keep_items = []
+    keep_results = []
+    for item, result in zip(items, results):
+        if isinstance(result, BaseException):
+            print(f"WARN: skipping {label_fn(item)}: {result}", file=sys.stderr)
+            continue
+        keep_items.append(item)
+        keep_results.append(result)
+    return keep_items, keep_results
+
+
 async def _analyze_article(
     article: Article,
     client: anthropic.AsyncAnthropic,
@@ -133,18 +154,32 @@ async def _run_async(
     cache: Cache,
 ) -> CoverageMatrix:
     print(f"Fetching {len(urls)} article(s)", file=sys.stderr)
-    articles = list(
-        await asyncio.gather(*[fetch_article(url) for url in urls])
+    fetch_results = await asyncio.gather(
+        *[fetch_article(url) for url in urls],
+        return_exceptions=True,
     )
+    _, articles = _partition_results(urls, fetch_results, label_fn=lambda u: u)
+    if not articles:
+        raise RuntimeError("All article fetches failed; nothing to analyze.")
 
-    per_article = await asyncio.gather(
-        *[_analyze_article(a, client, cache) for a in articles]
+    analysis_results = await asyncio.gather(
+        *[_analyze_article(a, client, cache) for a in articles],
+        return_exceptions=True,
     )
-    extractions = {
+    surviving, ext_lens_pairs = _partition_results(
+        articles,
+        analysis_results,
+        label_fn=lambda a: f"analysis of {a.outlet_domain}",
+    )
+    articles = surviving
+    if not articles:
+        raise RuntimeError("All article analyses failed; nothing to align.")
+
+    extractions: dict[str, ExtractionResult] = {
         article.id: extraction
-        for article, (extraction, _) in zip(articles, per_article)
+        for article, (extraction, _) in zip(articles, ext_lens_pairs)
     }
-    lenses = [lens for _, lens in per_article]
+    lenses: list[ArticleLens] = [lens for _, lens in ext_lens_pairs]
 
     syndication_groups = detect_syndication(articles)
     if syndication_groups:
