@@ -85,3 +85,68 @@ def test_select_diverse_preserves_order_within_pass():
         "bbc.com",
         "nytimes.com",
     ]
+
+
+def test_balance_spectrum_picks_one_per_bucket():
+    """With one result per spectrum bucket available, balanced selection picks all five."""
+    results = [
+        _r("msnbc.com"),       # left
+        _r("nytimes.com"),     # center-left
+        _r("reuters.com"),     # center
+        _r("nypost.com"),      # center-right
+        _r("foxnews.com"),     # right
+    ]
+    selected = select_diverse(results, n=5, balance_spectrum=True)
+    assert {r.outlet_domain for r in selected} == {
+        "msnbc.com", "nytimes.com", "reuters.com", "nypost.com", "foxnews.com",
+    }
+
+
+def test_balance_spectrum_distributes_when_one_bucket_dominates():
+    """If one bucket has many results and others have few, we still hit other buckets first."""
+    # Five center-left outlets but only one right outlet.
+    # Balanced selection should pick the right outlet before piling on center-left.
+    results = [
+        _r("nytimes.com"),     # center-left
+        _r("washingtonpost.com"),  # center-left
+        _r("cnn.com"),         # center-left
+        _r("politico.com"),    # center-left
+        _r("foxnews.com"),     # right
+    ]
+    selected = select_diverse(results, n=2, balance_spectrum=True)
+    domains = {r.outlet_domain for r in selected}
+    # Whichever single center-left was picked, foxnews must be in the result.
+    assert "foxnews.com" in domains
+
+
+def test_balance_spectrum_handles_no_lean_outlets():
+    """Outlets without a lean rating should be selectable but picked last."""
+    results = [
+        _r("aljazeera.com"),  # no lean assigned in registry
+        _r("nytimes.com"),     # center-left
+        _r("foxnews.com"),     # right
+    ]
+    # n=3 should pull all three, with leaned outlets first.
+    selected = select_diverse(results, n=3, balance_spectrum=True)
+    assert {r.outlet_domain for r in selected} == {
+        "aljazeera.com", "nytimes.com", "foxnews.com",
+    }
+    # First two picks must be the leaned ones.
+    first_two = {r.outlet_domain for r in selected[:2]}
+    assert "aljazeera.com" not in first_two
+
+
+def test_balance_spectrum_require_known_drops_unleaned():
+    """Even an outlet that's in the registry but has no lean is dropped under require_known."""
+    # require_known in the spectrum path means "must have a lean value".
+    # Wait — actually the docstring says require_known stops after Pass 1
+    # which is the leaned bucket. Let's verify.
+    results = [
+        _r("aljazeera.com"),  # registered but no lean
+        _r("nytimes.com"),     # center-left
+    ]
+    selected = select_diverse(
+        results, n=5, balance_spectrum=True, require_known=True
+    )
+    # require_known should stop after the leaned-bucket pass; aljazeera dropped.
+    assert [r.outlet_domain for r in selected] == ["nytimes.com"]

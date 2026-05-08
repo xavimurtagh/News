@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from .outlets import lookup as outlet_lookup
+from .outlets import SPECTRUM_ORDER, lookup as outlet_lookup
 
 
 @dataclass
@@ -115,6 +115,7 @@ def select_diverse(
     *,
     n: int = 5,
     require_known: bool = False,
+    balance_spectrum: bool = False,
 ) -> list[NewsResult]:
     """Pick up to n results, one per outlet, preferring known outlets.
 
@@ -125,7 +126,16 @@ def select_diverse(
        unless require_known is True, in which case we stop early.
 
     Preserves GDELT's relevance order within each pass.
+
+    With balance_spectrum=True the selection round-robins across
+    political-lean buckets (left → center-left → center → center-right
+    → right) before filling repeats, so the result favors cross-spectrum
+    coverage over the relevance-only ranking. Outlets with no lean are
+    held until last.
     """
+    if balance_spectrum:
+        return _select_spectrum_balanced(results, n=n, require_known=require_known)
+
     seen_outlets: set[str] = set()
     selected: list[NewsResult] = []
 
@@ -155,6 +165,73 @@ def select_diverse(
     return selected
 
 
+def _select_spectrum_balanced(
+    results: list[NewsResult],
+    *,
+    n: int,
+    require_known: bool,
+) -> list[NewsResult]:
+    """Round-robin across spectrum buckets to maximize cross-spectrum coverage.
+
+    Pass 1 fills one result per (left, center-left, center, center-right,
+    right) bucket. Repeats round-robin until n is reached or every bucket
+    is exhausted of fresh outlets. Pass 2 (skipped if require_known) fills
+    remaining slots from outlets without a lean tag.
+    """
+    # Group by lean. Order within each bucket preserves GDELT relevance.
+    by_lean: dict[Optional[str], list[NewsResult]] = {l: [] for l in SPECTRUM_ORDER}
+    by_lean[None] = []
+    for r in results:
+        info = outlet_lookup(r.outlet_domain)
+        lean = info.lean if info else None
+        by_lean[lean].append(r)
+
+    seen_outlets: set[str] = set()
+    selected: list[NewsResult] = []
+
+    # Pass 1: round-robin across the five lean buckets, one outlet per bucket
+    # per cycle, only outlets with a lean.
+    while len(selected) < n:
+        progress = False
+        for lean in SPECTRUM_ORDER:
+            picked = _take_next_unique(by_lean[lean], seen_outlets)
+            if picked is not None:
+                selected.append(picked)
+                progress = True
+                if len(selected) >= n:
+                    break
+        if not progress:
+            break
+
+    if require_known:
+        return selected
+
+    # Pass 2: outlets without a lean, until n is reached.
+    while len(selected) < n:
+        picked = _take_next_unique(by_lean[None], seen_outlets)
+        if picked is None:
+            break
+        selected.append(picked)
+
+    return selected
+
+
+def _take_next_unique(
+    bucket: list[NewsResult], seen_outlets: set[str]
+) -> Optional[NewsResult]:
+    """Pop and return the first result whose outlet hasn't been picked yet.
+
+    Mutates the bucket so a later cycle skips already-considered entries.
+    """
+    while bucket:
+        r = bucket.pop(0)
+        if r.outlet_domain in seen_outlets:
+            continue
+        seen_outlets.add(r.outlet_domain)
+        return r
+    return None
+
+
 def report_selection(selected: list[NewsResult]) -> None:
     """Print a one-line-per-source summary to stderr."""
     if not selected:
@@ -162,6 +239,10 @@ def report_selection(selected: list[NewsResult]) -> None:
         return
     for r in selected:
         info = outlet_lookup(r.outlet_domain)
-        label = f"{info.name} ({r.outlet_domain})" if info else r.outlet_domain
+        if info:
+            lean = f" [{info.lean}]" if info.lean else " [no-lean]"
+            label = f"{info.name} ({r.outlet_domain}){lean}"
+        else:
+            label = f"{r.outlet_domain} [unknown outlet]"
         title = r.title[:80] if r.title else "(no title)"
-        print(f"  [{label}] {title}", file=sys.stderr)
+        print(f"  {label}: {title}", file=sys.stderr)

@@ -24,6 +24,8 @@ from news_lens.models import (
     ConsensusTier,
     CoverageMatrix,
     CoverageStatus,
+    FramingDevice,
+    FramingDeviceType,
     HeadlineFraming,
     LensSignals,
     LoadedTerm,
@@ -274,6 +276,13 @@ LENSES = [
                     in_sentence="The order's sweeping language drew sharp pushback from immigration advocates and from members of the President's own party.",
                 ),
             ],
+            framing_devices=[
+                FramingDevice(
+                    device_type=FramingDeviceType.LEDE_BURYING,
+                    description="The administration's claimed legal basis appears in paragraph 2, while the constitutional challenge anchors the lede.",
+                    in_sentence="The order takes effect immediately and directs federal agencies to expedite removal proceedings while expanding asylum-screening criteria, according to the text released by the White House counsel's office.",
+                ),
+            ],
             sources_quoted=["legal scholars", "American Civil Liberties Union", "two people familiar with the matter", "White House counsel's office"],
         ),
     ),
@@ -323,6 +332,18 @@ LENSES = [
                 LoadedTerm(
                     term="rule of law",
                     neutral_alternative="immigration enforcement",
+                    in_sentence="A Border Patrol union official praised the order as a long-needed restoration of the rule of law.",
+                ),
+            ],
+            framing_devices=[
+                FramingDevice(
+                    device_type=FramingDeviceType.OMISSION_FLAG,
+                    description="No mention of the legal challenge that other outlets foregrounded; readers wouldn't know it existed from this article.",
+                    in_sentence="",
+                ),
+                FramingDevice(
+                    device_type=FramingDeviceType.SOURCE_ASYMMETRY,
+                    description="Border Patrol voices are quoted at length; no quotes from immigration advocates or affected communities are present.",
                     in_sentence="A Border Patrol union official praised the order as a long-needed restoration of the rule of law.",
                 ),
             ],

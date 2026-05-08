@@ -215,6 +215,15 @@ def main() -> int:
         "(news_lens/outlets.py). Otherwise unknown outlets fill in if "
         "fewer than --max-sources known outlets matched.",
     )
+    parser.add_argument(
+        "--balance-spectrum",
+        action="store_true",
+        help="With --search, round-robin source selection across the "
+        "left → center-left → center → center-right → right buckets "
+        "before filling repeats. Aims for cross-spectrum coverage of "
+        "the topic. Outlet leans come from the registry; outlets without "
+        "a lean are picked last.",
+    )
     args = parser.parse_args()
 
     urls = [_validate_url(u) for u in args.urls]
@@ -237,6 +246,7 @@ def main() -> int:
             results,
             n=args.max_sources,
             require_known=args.require_known_outlets,
+            balance_spectrum=args.balance_spectrum,
         )
         print(f"  selected {len(selected)} for analysis:", file=sys.stderr)
         report_selection(selected)

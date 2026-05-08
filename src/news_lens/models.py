@@ -140,6 +140,46 @@ class LoadedTerm(BaseModel):
     )
 
 
+class FramingDeviceType(str, Enum):
+    """Sentence-level framing patterns beyond simple word choice."""
+
+    SELECTIVE_HEDGING = "selective_hedging"
+    PASSIVE_VOICE_ASYMMETRY = "passive_voice_asymmetry"
+    CHARGED_ATTRIBUTION = "charged_attribution"
+    LEDE_BURYING = "lede_burying"
+    SOURCE_ASYMMETRY = "source_asymmetry"
+    IMPLIED_CONSENSUS = "implied_consensus"
+    SCARE_QUOTES = "scare_quotes"
+    NUMERICAL_FRAMING = "numerical_framing"
+    EUPHEMISM = "euphemism"
+    OMISSION_FLAG = "omission_flag"
+
+
+class FramingDevice(BaseModel):
+    """One sentence-level framing pattern flagged in the article.
+
+    Subtler than loaded vocabulary: catches hedging asymmetries, charged
+    descriptors at attribution, scare quotes, lede placement, and similar.
+    """
+
+    device_type: FramingDeviceType = Field(
+        description="Which kind of framing pattern this is."
+    )
+    description: str = Field(
+        description=(
+            "One-sentence description of what the article is doing in this "
+            "passage and how it shapes interpretation."
+        )
+    )
+    in_sentence: str = Field(
+        description=(
+            "Verbatim sentence(s) from the article body that exhibit this "
+            "pattern. Empty string for OMISSION_FLAG (the device is the "
+            "absence of something)."
+        )
+    )
+
+
 class LensSignals(BaseModel):
     """Framing signals produced by the lens analyzer for one article."""
 
@@ -149,6 +189,13 @@ class LensSignals(BaseModel):
     loaded_terms: List[LoadedTerm] = Field(
         default_factory=list,
         description="Charged or evaluative terms with neutral alternatives.",
+    )
+    framing_devices: List[FramingDevice] = Field(
+        default_factory=list,
+        description=(
+            "Sentence-level framing patterns beyond simple word choice — "
+            "selective hedging, charged attribution, lede burying, etc."
+        ),
     )
     sources_quoted: List[str] = Field(
         default_factory=list,

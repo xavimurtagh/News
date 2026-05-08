@@ -301,6 +301,13 @@
             "in_sentence": "The order's sweeping language drew sharp pushback from immigration advocates and from members of the President's own party."
           }
         ],
+        "framing_devices": [
+          {
+            "device_type": "lede_burying",
+            "description": "The administration's claimed legal basis appears in paragraph 2, while the constitutional challenge anchors the lede.",
+            "in_sentence": "The order takes effect immediately and directs federal agencies to expedite removal proceedings while expanding asylum-screening criteria, according to the text released by the White House counsel's office."
+          }
+        ],
         "sources_quoted": [
           "legal scholars",
           "American Civil Liberties Union",
@@ -316,6 +323,7 @@
       "signals": {
         "headline_framing": "mixed",
         "loaded_terms": [],
+        "framing_devices": [],
         "sources_quoted": [
           "Wall Street analysts",
           "Democratic lawmakers",
@@ -331,6 +339,7 @@
       "signals": {
         "headline_framing": "neutral",
         "loaded_terms": [],
+        "framing_devices": [],
         "sources_quoted": [
           "White House",
           "senior administration official",
@@ -345,6 +354,7 @@
       "signals": {
         "headline_framing": "neutral",
         "loaded_terms": [],
+        "framing_devices": [],
         "sources_quoted": [
           "White House",
           "senior administration official",
@@ -372,6 +382,18 @@
           {
             "term": "rule of law",
             "neutral_alternative": "immigration enforcement",
+            "in_sentence": "A Border Patrol union official praised the order as a long-needed restoration of the rule of law."
+          }
+        ],
+        "framing_devices": [
+          {
+            "device_type": "omission_flag",
+            "description": "No mention of the legal challenge that other outlets foregrounded; readers wouldn't know it existed from this article.",
+            "in_sentence": ""
+          },
+          {
+            "device_type": "source_asymmetry",
+            "description": "Border Patrol voices are quoted at length; no quotes from immigration advocates or affected communities are present.",
             "in_sentence": "A Border Patrol union official praised the order as a long-needed restoration of the rule of law."
           }
         ],

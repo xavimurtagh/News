@@ -28,6 +28,8 @@ from .models import (
     ConsensusTier,
     CoverageMatrix,
     CoverageStatus,
+    FramingDevice,
+    FramingDeviceType,
     HeadlineFraming,
     LoadedTerm,
     OutletCoverage,
@@ -85,6 +87,33 @@ _FRAMING_LABEL = {
     HeadlineFraming.NEUTRAL: "Neutral framing",
     HeadlineFraming.NEGATIVE: "Negative framing",
     HeadlineFraming.MIXED: "Mixed framing",
+}
+
+_DEVICE_LABEL = {
+    FramingDeviceType.SELECTIVE_HEDGING: "Selective hedging",
+    FramingDeviceType.PASSIVE_VOICE_ASYMMETRY: "Passive-voice asymmetry",
+    FramingDeviceType.CHARGED_ATTRIBUTION: "Charged attribution",
+    FramingDeviceType.LEDE_BURYING: "Lede burying",
+    FramingDeviceType.SOURCE_ASYMMETRY: "Source asymmetry",
+    FramingDeviceType.IMPLIED_CONSENSUS: "Implied consensus",
+    FramingDeviceType.SCARE_QUOTES: "Scare quotes",
+    FramingDeviceType.NUMERICAL_FRAMING: "Numerical framing",
+    FramingDeviceType.EUPHEMISM: "Euphemism",
+    FramingDeviceType.OMISSION_FLAG: "Omission",
+}
+
+# Coarse grouping for color: vocabulary-adjacent / structural / meta
+_DEVICE_GROUP = {
+    FramingDeviceType.CHARGED_ATTRIBUTION: "vocab",
+    FramingDeviceType.SCARE_QUOTES: "vocab",
+    FramingDeviceType.EUPHEMISM: "vocab",
+    FramingDeviceType.PASSIVE_VOICE_ASYMMETRY: "structure",
+    FramingDeviceType.LEDE_BURYING: "structure",
+    FramingDeviceType.SOURCE_ASYMMETRY: "structure",
+    FramingDeviceType.NUMERICAL_FRAMING: "structure",
+    FramingDeviceType.SELECTIVE_HEDGING: "meta",
+    FramingDeviceType.IMPLIED_CONSENSUS: "meta",
+    FramingDeviceType.OMISSION_FLAG: "meta",
 }
 
 _SUMMARY_HEADINGS = {
@@ -647,6 +676,50 @@ footer.site {
   border-radius: 2px;
 }
 
+.framing-devices { display: grid; gap: 10px; }
+.framing-device {
+  font-size: 13px;
+  line-height: 1.4;
+  border-left: 2px solid var(--border-strong);
+  padding-left: 10px;
+}
+.framing-device[data-group="vocab"] { border-left-color: #c0392b; }
+.framing-device[data-group="structure"] { border-left-color: #6d28d9; }
+.framing-device[data-group="meta"] { border-left-color: #d97706; }
+.framing-device .device-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+.framing-device .device-type-pill {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 7px;
+  border-radius: 8px;
+  color: #fff;
+  white-space: nowrap;
+}
+.framing-device[data-group="vocab"] .device-type-pill { background: #c0392b; }
+.framing-device[data-group="structure"] .device-type-pill { background: #6d28d9; }
+.framing-device[data-group="meta"] .device-type-pill { background: #d97706; }
+.framing-device .device-desc {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+.framing-device blockquote {
+  margin: 4px 0 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 13px;
+  color: var(--text);
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
+}
+
 .sources-quoted { display: flex; flex-wrap: wrap; gap: 6px; }
 .sources-quoted .source {
   font-size: 12px;
@@ -788,11 +861,14 @@ def _render_articles(
 
         info = _outlet_lookup(outlet)
         friendly_name = info.name if info else outlet
-        meta_line = (
-            f'<span class="meta">{_esc(info.country)} · {_esc(info.outlet_type)}</span>'
-            if info
-            else ""
-        )
+        meta_line = ""
+        if info:
+            meta_parts = [info.country, info.outlet_type]
+            if info.lean:
+                meta_parts.append(info.lean)
+            meta_line = (
+                f'<span class="meta">{_esc(" · ".join(meta_parts))}</span>'
+            )
         outlet_block = (
             f'<div class="outlet">'
             f'<span class="name">{_esc(friendly_name)}</span>'
@@ -1160,6 +1236,32 @@ def _render_loaded_terms(terms: list[LoadedTerm]) -> str:
     )
 
 
+def _render_framing_devices(devices: list[FramingDevice]) -> str:
+    if not devices:
+        return ""
+    rows = []
+    for d in devices:
+        group = _DEVICE_GROUP.get(d.device_type, "meta")
+        label = _DEVICE_LABEL.get(d.device_type, d.device_type.value)
+        if d.in_sentence:
+            blockquote_html = f"<blockquote>{_esc(d.in_sentence)}</blockquote>"
+        else:
+            blockquote_html = ""
+        rows.append(
+            f'<div class="framing-device" data-group="{group}">'
+            f'<div class="device-head">'
+            f'<span class="device-type-pill">{_esc(label)}</span>'
+            f'<span class="device-desc">{_esc(d.description)}</span>'
+            f"</div>"
+            f"{blockquote_html}"
+            f"</div>"
+        )
+    return (
+        f'<div class="lens-section-label">Framing devices ({len(devices)})</div>'
+        f'<div class="framing-devices">{"".join(rows)}</div>'
+    )
+
+
 def _render_sources(sources: list[str]) -> str:
     if not sources:
         return (
@@ -1178,11 +1280,12 @@ def _render_lens_card(lens: ArticleLens) -> str:
     return (
         f'<article class="lens-card" data-framing="{framing}">'
         f'<div class="head">'
-        f'<span class="outlet">{_esc(lens.outlet_domain)}</span>'
+        f'<span class="outlet">{_esc(_outlet_display_name(lens.outlet_domain))}</span>'
         f'<span class="framing-badge">{_esc(_FRAMING_LABEL[lens.signals.headline_framing])}</span>'
         f"</div>"
         f'<p class="stance">{_esc(lens.signals.stance_summary)}</p>'
         f"{_render_loaded_terms(lens.signals.loaded_terms)}"
+        f"{_render_framing_devices(lens.signals.framing_devices)}"
         f"{_render_sources(lens.signals.sources_quoted)}"
         f"</article>"
     )

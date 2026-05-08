@@ -185,3 +185,29 @@ def test_render_outputs_three_fingerprint_rows():
     """Two articles → two outlets → two fingerprint rows."""
     html_doc = render_html(_matrix())
     assert html_doc.count('class="fingerprint"') == 2
+
+
+def test_render_framing_devices():
+    """When a lens carries framing devices, they show as labelled blocks."""
+    from news_lens.models import FramingDevice, FramingDeviceType
+
+    matrix = _matrix()
+    # Inject a framing device on the existing NYT lens.
+    matrix.lenses[0].signals.framing_devices = [
+        FramingDevice(
+            device_type=FramingDeviceType.SELECTIVE_HEDGING,
+            description="Hedge words applied only to one side's claims.",
+            in_sentence="Critics allege X while supporters confirm Y.",
+        ),
+        FramingDevice(
+            device_type=FramingDeviceType.OMISSION_FLAG,
+            description="No mention of the counter-statistic.",
+            in_sentence="",
+        ),
+    ]
+    html_doc = render_html(matrix)
+    assert "Selective hedging" in html_doc
+    assert "Omission" in html_doc
+    assert html_doc.count('class="framing-device"') == 2
+    # Selective hedging is a "meta" group; its border should be amber.
+    assert 'data-group="meta"' in html_doc
