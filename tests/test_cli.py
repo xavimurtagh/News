@@ -11,7 +11,7 @@ import argparse
 import sys
 from unittest.mock import patch
 
-from news_lens.__main__ import _build_backend, _validate_url
+from news_lens.__main__ import _build_backend, _strip_line_continuations, _validate_url
 
 
 def _ns(**overrides):
@@ -130,3 +130,35 @@ def test_validate_url_rejects_empty():
     except SystemExit:
         return
     raise AssertionError("expected SystemExit for empty URL")
+
+
+def test_strip_line_continuations_removes_lone_backslash():
+    """The Windows-shell paper-cut: `\\` between flags as an arg."""
+    cleaned, n = _strip_line_continuations(
+        ["--search", "topic", "\\", "--ollama", "\\", "--html", "out.html"]
+    )
+    assert cleaned == ["--search", "topic", "--ollama", "--html", "out.html"]
+    assert n == 2
+
+
+def test_strip_line_continuations_passes_through_real_args():
+    """Args that aren't lone backslashes are preserved exactly."""
+    argv = ["--search", "trump tariffs", "--max-sources", "6", "--ollama"]
+    cleaned, n = _strip_line_continuations(argv)
+    assert cleaned == argv
+    assert n == 0
+
+
+def test_strip_line_continuations_preserves_paths_with_backslashes():
+    """Windows paths embed backslashes but aren't lone backslashes."""
+    argv = ["--urls-file", "C:\\Users\\x\\urls.txt"]
+    cleaned, n = _strip_line_continuations(argv)
+    assert cleaned == argv
+    assert n == 0
+
+
+def test_strip_line_continuations_handles_double_backslash():
+    """Some shells double up the backslash — handle that too."""
+    cleaned, n = _strip_line_continuations(["--search", "x", "\\\\", "--ollama"])
+    assert cleaned == ["--search", "x", "--ollama"]
+    assert n == 1

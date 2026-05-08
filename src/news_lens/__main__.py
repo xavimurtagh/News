@@ -1,37 +1,37 @@
-"""CLI entry point.
+r"""CLI entry point.
 
-Examples
---------
+Examples (each command fits on one line so it pastes cleanly in any shell)
+-------------------------------------------------------------------------
 
-Auto-discover sources covering a topic, then analyze them (no manual URLs):
-    python -m news_lens --search "gorton denton byelection green party" \\
-        --max-sources 5 --ollama --html out.html
+Auto-discover sources covering a topic, then analyze them:
+    python -m news_lens --search "gorton denton byelection" --max-sources 5 --ollama --html out.html
 
-Combine search + explicit URLs (search adds, doesn't replace):
-    python -m news_lens https://example.com/article \\
-        --search "topic" --max-sources 3 --ollama
+Spectrum-balanced search (one outlet per left/center-left/center/center-right/right):
+    python -m news_lens --search "trump tariffs" --balance-spectrum --max-sources 5 --ollama --model llama3.1:8b --html tariffs.html
+
+Combine search + explicit URLs:
+    python -m news_lens https://example.com/article --search "topic" --max-sources 3 --ollama
 
 Claude (default; requires ANTHROPIC_API_KEY):
     python -m news_lens URL1 URL2 URL3 --html out.html
 
 Local Llama via Ollama (zero subscriptions, runs on your machine):
-    1. Install: `bash scripts/setup_local.sh`  (or see scripts/setup_local.sh)
-    2. Run:     python -m news_lens URL1 URL2 URL3 --ollama --html out.html
+    bash scripts/setup_local.sh
+    python -m news_lens URL1 URL2 URL3 --ollama --html out.html
 
-The `--ollama` flag is shorthand for:
-    --backend openai-compatible --base-url http://localhost:11434/v1
-The default model is llama3.2:3b (~2GB RAM, runs anywhere).
-
-For larger machines / better quality, override:
-    python -m news_lens URL1 URL2 URL3 --ollama --model llama3.1:8b   # ~5GB RAM
-    python -m news_lens URL1 URL2 URL3 --ollama --model qwen2.5:14b   # ~9GB RAM
+The `--ollama` flag is shorthand for `--backend openai-compatible
+--base-url http://localhost:11434/v1`. Default model is llama3.2:3b
+(~2GB RAM). Override with `--model llama3.1:8b` (~5GB) or
+`--model qwen2.5:14b` (~9GB) for better quality.
 
 Hosted-but-not-Claude (e.g. Groq's free tier):
-    python -m news_lens URL1 URL2 URL3 \\
-        --backend openai-compatible \\
-        --base-url https://api.groq.com/openai/v1 \\
-        --model llama-3.1-70b-versatile \\
-        --api-key-env GROQ_API_KEY
+    python -m news_lens URL1 URL2 URL3 --backend openai-compatible --base-url https://api.groq.com/openai/v1 --model llama-3.1-70b-versatile --api-key-env GROQ_API_KEY
+
+Multi-line note: backslash line continuation works in bash/zsh on Linux/macOS.
+On Windows cmd use `^` at end of line; on Windows PowerShell use backtick.
+If your shell passes lone `\` as arguments, this CLI strips them with a
+warning so the command still works, but the cleanest fix is to paste the
+command on one line.
 
 Migration strategy and longer-term self-hosting paths are documented in
 news_lens/backends/__init__.py.
@@ -53,6 +53,24 @@ from .render import render_html
 
 _OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434/v1"
 _OLLAMA_DEFAULT_MODEL = "llama3.2:3b"
+
+
+def _strip_line_continuations(argv: list[str]) -> tuple[list[str], int]:
+    """Drop lone backslash args from argv (Windows cmd/PowerShell paper-cut).
+
+    A lone backslash in argv means the user typed `\\` for line continuation
+    in a shell that doesn't recognize it (Windows cmd uses ^, PowerShell uses
+    backtick). We strip those and tell the user, so the command still works.
+    Returns (cleaned_argv, n_stripped).
+    """
+    cleaned: list[str] = []
+    stripped = 0
+    for arg in argv:
+        if arg.strip() in ("\\", "\\\\"):
+            stripped += 1
+            continue
+        cleaned.append(arg)
+    return cleaned, stripped
 
 
 def _validate_url(raw: str) -> str:
@@ -224,7 +242,17 @@ def main() -> int:
         "the topic. Outlet leans come from the registry; outlets without "
         "a lean are picked last.",
     )
-    args = parser.parse_args()
+    raw_argv = sys.argv[1:]
+    cleaned_argv, n_stripped = _strip_line_continuations(raw_argv)
+    if n_stripped:
+        print(
+            f"WARN: stripped {n_stripped} lone backslash arg(s) — your shell "
+            "didn't interpret them as line continuation. On Windows cmd use "
+            "^ at end-of-line, on PowerShell use ` (backtick), or paste the "
+            "command on a single line.",
+            file=sys.stderr,
+        )
+    args = parser.parse_args(cleaned_argv)
 
     urls = [_validate_url(u) for u in args.urls]
     if args.urls_file:
