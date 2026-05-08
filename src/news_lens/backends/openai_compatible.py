@@ -38,12 +38,25 @@ How structured output is enforced
 
 Most local LLMs don't natively support Anthropic-style typed outputs.
 The `instructor` library wraps the OpenAI client to validate responses
-against a Pydantic schema — it converts the schema to JSON Schema, asks
-the model to fill it via tool calls or JSON mode, and validates +
-retries on parse errors. Quality varies by model: Llama 3.1 8B+ and
-Qwen 2.5 7B+ produce reliable structured output; smaller models
-struggle and may need JSON-mode (instructor.Mode.JSON) or grammar
-constraints.
+against a Pydantic schema. It supports several enforcement strategies
+(modes); the right one depends on the model:
+
+- **JSON mode (default here)** — instructor adds a "respond in JSON
+  matching this schema" instruction to the system prompt and parses
+  the response. Most reliable on local 7B/8B models and below; works
+  with every OpenAI-compatible server.
+- **TOOLS mode** — uses the model's tool-calling interface. Works on
+  GPT-4-class models reliably, but smaller models (Llama 3 8B, Llama
+  3.2 3B) tend to emit malformed tool calls or multiple tool calls
+  per response, which instructor rejects with
+  "does not support multiple tool calls". Avoid for local inference.
+- **JSON_SCHEMA mode** — uses servers that natively support
+  response_format with a JSON schema (vLLM with the `--guided-decoding`
+  flag, llama.cpp's grammar option). Most reliable when supported but
+  not universal.
+
+Pass `mode=instructor.Mode.TOOLS` at construction if you're on
+GPT-4-class hosting and want the standard tool-call path.
 
 Prompt sensitivity
 ------------------
@@ -51,19 +64,16 @@ Prompt sensitivity
 The prompts in extract.py / lens.py / align.py were tuned against
 Claude. Open-weight models tend to follow them well enough but quality
 drops, especially on the citation-fidelity rule (return verbatim
-substring) and on the "do not invent claims" rule. If you see
-hallucinated citations after a backend swap, consider:
-
-- Adding 1-2 in-context examples (few-shot) to the system prompt
-- Lowering temperature to 0
-- Using JSON mode (instructor.Mode.JSON_SCHEMA) for stricter validation
-- Fine-tuning the model on Claude-generated outputs (see
-  backends/__init__.py for the bootstrapping recipe).
+substring) and on the "do not invent claims" rule. Smaller models
+(<= 3B parameters) struggle on the longer prompts and complex
+schemas — the citation guard catches and drops their bad outputs, so
+the matrix is smaller but stays trustworthy. Llama 3.1 8B is the
+recommended quality target; 3B is for testing only.
 """
 
 from __future__ import annotations
 
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
@@ -81,6 +91,7 @@ class OpenAICompatibleBackend:
         max_tokens: int = 8000,
         temperature: float = 0.0,
         max_retries: int = 2,
+        mode: Any | None = None,
     ) -> None:
         try:
             import instructor
@@ -90,8 +101,14 @@ class OpenAICompatibleBackend:
                 "OpenAICompatibleBackend requires `instructor` and `openai`. "
                 'Install with: pip install -e ".[local-llm]"'
             ) from e
+        # JSON mode is the most reliable on local 3B-8B models. Tool-calling
+        # mode (instructor's default for OpenAI-compatible) breaks on smaller
+        # models that emit malformed or multiple tool calls.
+        if mode is None:
+            mode = instructor.Mode.JSON
         self._client = instructor.from_openai(
-            AsyncOpenAI(base_url=base_url, api_key=api_key)
+            AsyncOpenAI(base_url=base_url, api_key=api_key),
+            mode=mode,
         )
         self._base_url = base_url
         self.model = model

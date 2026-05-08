@@ -3,6 +3,14 @@
 Examples
 --------
 
+Auto-discover sources covering a topic, then analyze them (no manual URLs):
+    python -m news_lens --search "gorton denton byelection green party" \\
+        --max-sources 5 --ollama --html out.html
+
+Combine search + explicit URLs (search adds, doesn't replace):
+    python -m news_lens https://example.com/article \\
+        --search "topic" --max-sources 3 --ollama
+
 Claude (default; requires ANTHROPIC_API_KEY):
     python -m news_lens URL1 URL2 URL3 --html out.html
 
@@ -36,12 +44,36 @@ import os
 import sys
 from pathlib import Path
 
+import asyncio
+
+from .discover import report_selection, search, select_diverse
 from .pipeline import run_pipeline
 from .render import render_html
 
 
 _OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434/v1"
 _OLLAMA_DEFAULT_MODEL = "llama3.2:3b"
+
+
+def _validate_url(raw: str) -> str:
+    """Strip whitespace and verify the argument looks like a URL.
+
+    Catches the common paste-with-line-continuation paper-cut where backslashes
+    survive shell parsing on Windows cmd/PowerShell.
+    """
+    url = raw.strip()
+    if not url:
+        raise SystemExit("error: empty URL passed as argument")
+    if not (url.startswith("http://") or url.startswith("https://")):
+        raise SystemExit(
+            f"error: not a valid URL: {raw!r}\n"
+            "If you used backslash for line continuation in your shell and "
+            "the backslash got passed as an argument, your shell didn't "
+            "interpret it. On Windows cmd use ^ at end-of-line, on PowerShell "
+            "use ` (backtick), or pass URLs on a single line / via "
+            "--urls-file path/to/urls.txt."
+        )
+    return url
 
 
 def _build_backend(args: argparse.Namespace):
@@ -162,18 +194,58 @@ def main() -> int:
         "(e.g. GROQ_API_KEY, OPENROUTER_API_KEY). Omit for local servers "
         "that do not require auth.",
     )
+    parser.add_argument(
+        "--search",
+        type=str,
+        default=None,
+        help='Auto-search GDELT for articles on this topic. e.g. '
+        '--search "gorton denton byelection". Combines with explicit URLs.',
+    )
+    parser.add_argument(
+        "--max-sources",
+        type=int,
+        default=5,
+        help="Max sources to keep from --search results (default: 5). One "
+        "article per outlet, prioritizing outlets in the registry.",
+    )
+    parser.add_argument(
+        "--require-known-outlets",
+        action="store_true",
+        help="With --search, only include outlets in the registry "
+        "(news_lens/outlets.py). Otherwise unknown outlets fill in if "
+        "fewer than --max-sources known outlets matched.",
+    )
     args = parser.parse_args()
 
-    urls = list(args.urls)
+    urls = [_validate_url(u) for u in args.urls]
     if args.urls_file:
         urls.extend(
-            line.strip()
+            _validate_url(line)
             for line in args.urls_file.read_text().splitlines()
             if line.strip() and not line.strip().startswith("#")
         )
 
+    if args.search:
+        print(f"Searching GDELT for: {args.search!r}", file=sys.stderr)
+        results = asyncio.run(search(args.search, max_results=30))
+        outlets_found = {r.outlet_domain for r in results}
+        print(
+            f"  found {len(results)} articles across {len(outlets_found)} outlet(s)",
+            file=sys.stderr,
+        )
+        selected = select_diverse(
+            results,
+            n=args.max_sources,
+            require_known=args.require_known_outlets,
+        )
+        print(f"  selected {len(selected)} for analysis:", file=sys.stderr)
+        report_selection(selected)
+        urls.extend(r.url for r in selected)
+
     if not urls:
-        parser.error("Provide at least one URL (positional or via --urls-file).")
+        parser.error(
+            "Provide at least one URL (positional, --urls-file, or --search)."
+        )
         return 2
 
     backend = _build_backend(args)
