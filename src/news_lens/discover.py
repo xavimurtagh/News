@@ -6,7 +6,9 @@ slice using the outlet registry.
 
 The GDELT path is deliberately the only one for now:
 - It returns actual article URLs (no Google News redirects to decode).
-- It's free with no rate limits worth speaking of for personal use.
+- It's free with no formal rate limit, though it does throttle bursty
+  traffic; this module retries with exponential backoff and caches
+  results on disk to keep usage gentle.
 - It indexes a large set of outlets globally, which gives the
   cross-outlet comparison something to work with.
 
@@ -18,14 +20,18 @@ URLs as arguments.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
+from .cache import Cache
 from .outlets import SPECTRUM_ORDER, lookup as outlet_lookup
 
 
@@ -39,10 +45,31 @@ class NewsResult:
 
 
 _GDELT_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
-_USER_AGENT = "news-lens/0.1"
+# Polite UA with a contact link so GDELT operators can identify traffic.
+_USER_AGENT = "news-lens/0.1 (+https://github.com/xavimurtagh/news)"
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+_INITIAL_BACKOFF_SECONDS = 2.0
+_MAX_BACKOFF_SECONDS = 30.0
 
 
-def _fetch_gdelt(query: str, max_records: int) -> dict:
+def _parse_retry_after(header: Optional[str]) -> Optional[float]:
+    if not header:
+        return None
+    try:
+        return max(0.0, float(header))
+    except ValueError:
+        # GDELT could in theory send an HTTP-date; we fall back to
+        # exponential backoff rather than parsing it.
+        return None
+
+
+def _fetch_gdelt(
+    query: str,
+    max_records: int,
+    *,
+    max_retries: int = 4,
+    sleep: callable = time.sleep,
+) -> dict:
     params = {
         "query": query,
         "mode": "ArtList",
@@ -51,16 +78,58 @@ def _fetch_gdelt(query: str, max_records: int) -> dict:
         "sort": "HybridRel",  # relevance + freshness
     }
     url = f"{_GDELT_URL}?{urllib.parse.urlencode(params)}"
-    req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        body = resp.read().decode("utf-8", errors="replace")
-    if not body.strip():
-        return {"articles": []}
-    try:
-        return json.loads(body)
-    except json.JSONDecodeError:
-        # GDELT occasionally returns HTML error pages on malformed queries.
-        return {"articles": []}
+
+    last_err: Optional[BaseException] = None
+    delay = _INITIAL_BACKOFF_SECONDS
+    for attempt in range(max_retries):
+        req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+            if not body.strip():
+                return {"articles": []}
+            try:
+                return json.loads(body)
+            except json.JSONDecodeError:
+                # GDELT occasionally returns HTML error pages on malformed queries.
+                return {"articles": []}
+        except urllib.error.HTTPError as e:
+            last_err = e
+            if e.code not in _RETRYABLE_STATUS:
+                raise
+            if attempt == max_retries - 1:
+                break
+            wait = _parse_retry_after(
+                e.headers.get("Retry-After") if e.headers else None
+            )
+            if wait is None:
+                wait = delay
+            wait = min(wait, _MAX_BACKOFF_SECONDS)
+            print(
+                f"WARN: GDELT returned {e.code}; retrying in {wait:.1f}s "
+                f"(attempt {attempt + 1}/{max_retries})",
+                file=sys.stderr,
+            )
+            sleep(wait)
+            delay = min(delay * 2, _MAX_BACKOFF_SECONDS)
+        except urllib.error.URLError as e:
+            last_err = e
+            if attempt == max_retries - 1:
+                break
+            print(
+                f"WARN: GDELT connection error ({e.reason}); retrying in "
+                f"{delay:.1f}s (attempt {attempt + 1}/{max_retries})",
+                file=sys.stderr,
+            )
+            sleep(delay)
+            delay = min(delay * 2, _MAX_BACKOFF_SECONDS)
+
+    raise RuntimeError(
+        f"GDELT search failed after {max_retries} attempts (last error: "
+        f"{last_err}). GDELT may be rate-limiting your IP. Try waiting "
+        "a few minutes, switching network, or pass article URLs directly "
+        "instead of --search."
+    ) from last_err
 
 
 def _normalize_domain(domain: str) -> str:
@@ -70,10 +139,41 @@ def _normalize_domain(domain: str) -> str:
     return domain
 
 
+def _serialize_result(r: NewsResult) -> dict:
+    return {
+        "title": r.title,
+        "url": r.url,
+        "outlet_domain": r.outlet_domain,
+        "published_at": r.published_at.isoformat() if r.published_at else None,
+        "country": r.country,
+    }
+
+
+def _deserialize_result(d: dict) -> NewsResult:
+    pub: Optional[datetime] = None
+    if d.get("published_at"):
+        try:
+            pub = datetime.fromisoformat(d["published_at"])
+        except ValueError:
+            pub = None
+    return NewsResult(
+        title=d.get("title", ""),
+        url=d.get("url", ""),
+        outlet_domain=d.get("outlet_domain", ""),
+        published_at=pub,
+        country=d.get("country"),
+    )
+
+
+def _cache_key(query: str, max_results: int) -> str:
+    return hashlib.sha256(f"{query}::{max_results}".encode("utf-8")).hexdigest()[:24]
+
+
 async def search(
     query: str,
     *,
     max_results: int = 30,
+    cache: Optional[Cache] = None,
 ) -> list[NewsResult]:
     """Search GDELT for articles matching the query.
 
@@ -81,7 +181,18 @@ async def search(
     score (relevance + freshness). Each result has the article URL,
     outlet domain (lowercased, www. stripped), title, and publish date
     if available.
+
+    Passing a `cache` short-circuits the network call for repeat queries:
+    the same query at the same max_results returns the cached results
+    forever. Delete the .cache directory (or just the gdelt namespace)
+    to force a refresh.
     """
+    key = _cache_key(query, max_results)
+    if cache is not None:
+        cached = cache.get("gdelt", key)
+        if cached is not None:
+            return [_deserialize_result(d) for d in cached]
+
     raw = await asyncio.to_thread(_fetch_gdelt, query, max_results)
     results: list[NewsResult] = []
     for art in raw.get("articles", []):
@@ -107,6 +218,9 @@ async def search(
                 country=art.get("sourcecountry"),
             )
         )
+
+    if cache is not None:
+        cache.set("gdelt", [_serialize_result(r) for r in results], key)
     return results
 
 

@@ -46,6 +46,7 @@ from pathlib import Path
 
 import asyncio
 
+from .cache import Cache
 from .discover import report_selection, search, select_diverse
 from .pipeline import run_pipeline
 from .render import render_html
@@ -264,7 +265,10 @@ def main() -> int:
 
     if args.search:
         print(f"Searching GDELT for: {args.search!r}", file=sys.stderr)
-        results = asyncio.run(search(args.search, max_results=30))
+        search_cache = Cache(args.cache_dir)
+        results = asyncio.run(
+            search(args.search, max_results=30, cache=search_cache)
+        )
         outlets_found = {r.outlet_domain for r in results}
         print(
             f"  found {len(results)} articles across {len(outlets_found)} outlet(s)",
