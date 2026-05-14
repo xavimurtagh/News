@@ -40,7 +40,7 @@ def test_ollama_shortcut_picks_default_base_url_and_model():
         _build_backend(_ns(ollama=True))
 
     assert captured["base_url"] == "http://localhost:11434/v1"
-    assert captured["model"] == "llama3.2:3b"
+    assert captured["model"] == "qwen3:8b"
 
 
 def test_ollama_shortcut_accepts_model_override():
