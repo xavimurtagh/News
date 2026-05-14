@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from typing import Mapping
 
 from .backends.base import StructuredLLM
@@ -51,6 +52,7 @@ from .models import (
     AlignmentResult,
     Article,
     CanonicalClaim,
+    ClaimType,
     CoverageStatus,
     ExtractionResult,
     OutletCoverage,
@@ -106,9 +108,25 @@ async def align_claims(
     if cached is not None:
         return AlignmentResult.model_validate(cached)
 
-    parsed = await llm.parse(
-        system=_SYSTEM_PROMPT, user=payload, schema=AlignmentResult
-    )
+    try:
+        parsed = await llm.parse(
+            system=_SYSTEM_PROMPT, user=payload, schema=AlignmentResult
+        )
+    except Exception as exc:
+        # The LLM couldn't produce a schema-conforming AlignmentResult after
+        # its retries (common with small open-weight models that echo the
+        # JSON Schema back instead of filling it). Degrade to a per-article
+        # alignment so the rest of the pipeline — and the HTML report — can
+        # still surface what each outlet said. Cross-outlet consensus tiers
+        # will be useless here; flag that explicitly to the operator.
+        print(
+            f"WARN: alignment LLM call failed ({type(exc).__name__}); "
+            "falling back to per-article alignment with no cross-outlet "
+            "matching. Use a stronger model (qwen3:8b or larger) for real "
+            "consensus tiers.",
+            file=sys.stderr,
+        )
+        return _fallback_alignment(articles, extractions)
 
     article_ids = [a.id for a in articles]
     article_to_outlet = {a.id: a.outlet_domain for a in articles}
@@ -131,3 +149,52 @@ async def align_claims(
     result = AlignmentResult(canonical_claims=filled)
     cache.set("alignments", result.model_dump(mode="json"), payload_hash, _PROMPT_HASH, llm.name)
     return result
+
+
+def _fallback_alignment(
+    articles: list[Article],
+    extractions: Mapping[str, ExtractionResult],
+) -> AlignmentResult:
+    """Trivial alignment used when the LLM can't produce a valid result.
+
+    Each extracted claim becomes its own canonical claim with one outlet
+    entry (the article it came from); all other articles are marked
+    omitted. This is intentionally degraded — no cross-outlet matching
+    happens — but it lets the pipeline render a coverage matrix instead
+    of crashing.
+    """
+    article_ids = [a.id for a in articles]
+    article_to_outlet = {a.id: a.outlet_domain for a in articles}
+
+    canonical: list[CanonicalClaim] = []
+    for article in articles:
+        for claim in extractions[article.id].claims:
+            if claim.claim_type == ClaimType.ATTRIBUTED:
+                status = CoverageStatus.ATTRIBUTED
+            else:
+                status = CoverageStatus.ASSERTED
+            outlets = [
+                OutletCoverage(
+                    outlet_domain=article.outlet_domain,
+                    article_id=article.id,
+                    status=status,
+                    source_quote=claim.source_quote,
+                    attributed_to=claim.attributed_to,
+                    position=claim.position,
+                )
+            ]
+            for aid in article_ids:
+                if aid == article.id:
+                    continue
+                outlets.append(
+                    OutletCoverage(
+                        outlet_domain=article_to_outlet[aid],
+                        article_id=aid,
+                        status=CoverageStatus.OMITTED,
+                    )
+                )
+            canonical.append(
+                CanonicalClaim(canonical_text=claim.claim_text, outlets=outlets)
+            )
+
+    return AlignmentResult(canonical_claims=canonical)

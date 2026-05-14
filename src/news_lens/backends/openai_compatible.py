@@ -67,8 +67,20 @@ drops, especially on the citation-fidelity rule (return verbatim
 substring) and on the "do not invent claims" rule. Smaller models
 (<= 3B parameters) struggle on the longer prompts and complex
 schemas — the citation guard catches and drops their bad outputs, so
-the matrix is smaller but stays trustworthy. Llama 3.1 8B is the
-recommended quality target; 3B is for testing only.
+the matrix is smaller but stays trustworthy.
+
+Model recommendations (Ollama)
+------------------------------
+
+- **qwen3:8b** (default) — best quality-per-GB locally. Follows the
+  nested `$defs` Pydantic schemas reliably in JSON mode.
+- **qwen2.5:14b** / **qwen3:14b** — noticeably better alignment if
+  you have the VRAM (~9GB).
+- **llama3.1:8b** and below — NOT recommended. These models commonly
+  return the JSON Schema definition (literal `$defs`, `properties`,
+  `required` keys) instead of an instance of it, which makes
+  extraction and alignment fail. If you must use Llama, prefer the
+  70B class on hosted endpoints (Groq, OpenRouter).
 """
 
 from __future__ import annotations

@@ -7,7 +7,7 @@ Auto-discover sources covering a topic, then analyze them:
     python -m news_lens --search "gorton denton byelection" --max-sources 5 --ollama --html out.html
 
 Spectrum-balanced search (one outlet per left/center-left/center/center-right/right):
-    python -m news_lens --search "trump tariffs" --balance-spectrum --max-sources 5 --ollama --model llama3.1:8b --html tariffs.html
+    python -m news_lens --search "trump tariffs" --balance-spectrum --max-sources 5 --ollama --model qwen3:8b --html tariffs.html
 
 Combine search + explicit URLs:
     python -m news_lens https://example.com/article --search "topic" --max-sources 3 --ollama
@@ -20,9 +20,13 @@ Local Llama via Ollama (zero subscriptions, runs on your machine):
     python -m news_lens URL1 URL2 URL3 --ollama --html out.html
 
 The `--ollama` flag is shorthand for `--backend openai-compatible
---base-url http://localhost:11434/v1`. Default model is llama3.2:3b
-(~2GB RAM). Override with `--model llama3.1:8b` (~5GB) or
-`--model qwen2.5:14b` (~9GB) for better quality.
+--base-url http://localhost:11434/v1`. Default model is qwen3:8b
+(~5GB RAM) — Qwen models are far more reliable than Llama on the
+nested JSON schemas this pipeline requires. Fall back to a smaller
+model with `--model qwen3:4b` (~3GB) for low-RAM machines, or scale
+up to `--model qwen2.5:14b` (~9GB) for the best local quality.
+Llama 3.x at 8B and below tends to echo the JSON schema back instead
+of filling it, breaking extraction and alignment.
 
 Hosted-but-not-Claude (e.g. Groq's free tier):
     python -m news_lens URL1 URL2 URL3 --backend openai-compatible --base-url https://api.groq.com/openai/v1 --model llama-3.1-70b-versatile --api-key-env GROQ_API_KEY
@@ -53,7 +57,7 @@ from .render import render_html
 
 
 _OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434/v1"
-_OLLAMA_DEFAULT_MODEL = "llama3.2:3b"
+_OLLAMA_DEFAULT_MODEL = "qwen3:8b"
 
 
 def _strip_line_continuations(argv: list[str]) -> tuple[list[str], int]:
@@ -204,7 +208,7 @@ def main() -> int:
         "--model",
         default=None,
         help="Model name. For Claude defaults to claude-opus-4-7. "
-        "For openai-compatible required (e.g. llama3.1:8b).",
+        "For openai-compatible required (e.g. qwen3:8b).",
     )
     parser.add_argument(
         "--api-key-env",

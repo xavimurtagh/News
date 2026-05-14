@@ -4,25 +4,26 @@
 # themselves.
 #
 # Usage:
-#   bash scripts/setup_local.sh                    # default: llama3.2:3b
-#   bash scripts/setup_local.sh llama3.1:8b        # if you have 8GB+ free RAM
+#   bash scripts/setup_local.sh                    # default: qwen3:8b
+#   bash scripts/setup_local.sh qwen3:4b           # low-RAM machines
 #   bash scripts/setup_local.sh qwen2.5:14b        # if you have 16GB+
 #
 # Choosing a model:
-#   llama3.2:1b     ~1.3 GB RAM   smallest, lowest quality, good for testing
-#   llama3.2:3b     ~2.0 GB RAM   recommended default; runs anywhere
-#   gemma2:2b       ~1.6 GB RAM   strong for size
-#   qwen2.5:7b      ~4.4 GB RAM   strong reasoner; 8GB+ machines
-#   llama3.1:8b     ~4.7 GB RAM   the recommended quality target
+#   qwen3:4b        ~3.0 GB RAM   smallest model that handles nested JSON schemas reliably
+#   qwen3:8b        ~5.0 GB RAM   recommended default; best quality-per-GB
 #   qwen2.5:14b     ~8.7 GB RAM   meaningful quality bump
-#   llama3.1:70b    ~40 GB RAM    needs a real GPU
+#   qwen2.5:32b     ~20  GB RAM   approaches hosted-Claude quality
+#
+# Llama 3.x at 8B and below tends to echo the JSON schema back instead of
+# filling it in, which breaks extraction and alignment. Stick with Qwen
+# locally, or use Llama 70B-class only on hosted endpoints.
 #
 # After this script finishes, run:
 #   python -m news_lens URL1 URL2 URL3 --ollama --html out.html
 
 set -euo pipefail
 
-MODEL="${1:-llama3.2:3b}"
+MODEL="${1:-qwen3:8b}"
 
 if ! command -v ollama >/dev/null 2>&1; then
     echo "Installing Ollama..."
