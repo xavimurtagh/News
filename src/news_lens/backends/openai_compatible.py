@@ -85,6 +85,7 @@ Model recommendations (Ollama)
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, TypeVar
 
 from pydantic import BaseModel
@@ -104,6 +105,7 @@ class OpenAICompatibleBackend:
         temperature: float = 0.0,
         max_retries: int = 2,
         mode: Any | None = None,
+        max_concurrency: int = 2,
     ) -> None:
         try:
             import instructor
@@ -128,8 +130,19 @@ class OpenAICompatibleBackend:
         self.temperature = temperature
         self.max_retries = max_retries
         self.name = f"openai:{base_url}:{model}"
+        # The pipeline fans every article out concurrently (extract + lens
+        # per article). A local Ollama / llama.cpp server holds one model
+        # in memory and serializes work anyway — flooding it with 20+
+        # simultaneous requests just balloons memory and can crash the
+        # server mid-run. Cap in-flight requests so a local backend stays
+        # alive; hosted endpoints can raise this at construction.
+        self._semaphore = asyncio.Semaphore(max(1, max_concurrency))
 
     async def parse(self, *, system: str, user: str, schema: type[T]) -> T:
+        async with self._semaphore:
+            return await self._parse(system=system, user=user, schema=schema)
+
+    async def _parse(self, *, system: str, user: str, schema: type[T]) -> T:
         try:
             return await self._client.chat.completions.create(
                 model=self.model,

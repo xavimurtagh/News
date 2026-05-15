@@ -299,13 +299,13 @@ def main() -> int:
     output_json = matrix.model_dump_json(indent=2)
 
     if args.output:
-        args.output.write_text(output_json)
+        args.output.write_text(output_json, encoding="utf-8")
         print(f"Wrote coverage matrix to {args.output}", file=sys.stderr)
     elif not args.html:
         print(output_json)
 
     if args.html:
-        args.html.write_text(render_html(matrix))
+        args.html.write_text(render_html(matrix), encoding="utf-8")
         print(f"Wrote HTML report to {args.html}", file=sys.stderr)
 
     return 0
