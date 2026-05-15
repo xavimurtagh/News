@@ -77,3 +77,38 @@ def test_spectrum_includes_both_ends():
     assert "left" in leans
     assert "right" in leans
     assert "center" in leans
+
+
+def test_tier_defaults_to_mainstream():
+    """An outlet constructed without an explicit tier is mainstream."""
+    info = lookup("nytimes.com")
+    assert info is not None
+    assert info.tier == "mainstream"
+
+
+def test_tier_values_are_valid():
+    """Every assigned tier must be one of the canonical institutional tiers."""
+    from news_lens.outlets import INSTITUTIONAL_TIERS, _REGISTRY
+    valid = set(INSTITUTIONAL_TIERS)
+    for domain, info in _REGISTRY.items():
+        assert info.tier in valid, (
+            f"{domain} has invalid tier {info.tier!r}; "
+            f"must be one of {INSTITUTIONAL_TIERS}"
+        )
+
+
+def test_registry_spans_multiple_tiers():
+    """The institutional axis needs more than one tier represented."""
+    from news_lens.outlets import _REGISTRY
+    tiers = {info.tier for info in _REGISTRY.values()}
+    for expected in ("mainstream", "public", "independent", "advocacy", "state"):
+        assert expected in tiers, f"no outlet tagged tier={expected!r}"
+
+
+def test_public_broadcasters_tagged():
+    """Licence-fee / appropriation-funded broadcasters carry the public tier."""
+    for domain in ("bbc.com", "npr.org", "pbs.org", "cbc.ca"):
+        info = lookup(domain)
+        assert info is not None
+        assert info.tier == "public", f"{domain} should be tier=public"
+
