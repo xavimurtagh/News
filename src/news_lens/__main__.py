@@ -9,6 +9,9 @@ Auto-discover sources covering a topic, then analyze them:
 Spectrum-balanced search (one outlet per left/center-left/center/center-right/right):
     python -m news_lens --search "trump tariffs" --balance-spectrum --max-sources 5 --ollama --model qwen3:8b --html tariffs.html
 
+Tier-balanced search (round-robin across mainstream/public/independent/advocacy/state):
+    python -m news_lens --search "trump tariffs" --balance-tier --max-sources 5 --ollama --model qwen3:8b --html tariffs.html
+
 Combine search + explicit URLs:
     python -m news_lens https://example.com/article --search "topic" --max-sources 3 --ollama
 
@@ -238,7 +241,8 @@ def main() -> int:
         "(news_lens/outlets.py). Otherwise unknown outlets fill in if "
         "fewer than --max-sources known outlets matched.",
     )
-    parser.add_argument(
+    balance_group = parser.add_mutually_exclusive_group()
+    balance_group.add_argument(
         "--balance-spectrum",
         action="store_true",
         help="With --search, round-robin source selection across the "
@@ -246,6 +250,16 @@ def main() -> int:
         "before filling repeats. Aims for cross-spectrum coverage of "
         "the topic. Outlet leans come from the registry; outlets without "
         "a lean are picked last.",
+    )
+    balance_group.add_argument(
+        "--balance-tier",
+        action="store_true",
+        help="With --search, round-robin source selection across the "
+        "institutional-tier buckets (mainstream / public / independent / "
+        "advocacy / state) before filling repeats. Targets the axis a "
+        "left-vs-right balance misses: a spectrum-balanced sample can "
+        "still be entirely commercial-mainstream. Mutually exclusive "
+        "with --balance-spectrum.",
     )
     raw_argv = sys.argv[1:]
     cleaned_argv, n_stripped = _strip_line_continuations(raw_argv)
@@ -283,6 +297,7 @@ def main() -> int:
             n=args.max_sources,
             require_known=args.require_known_outlets,
             balance_spectrum=args.balance_spectrum,
+            balance_tier=args.balance_tier,
         )
         print(f"  selected {len(selected)} for analysis:", file=sys.stderr)
         report_selection(selected)

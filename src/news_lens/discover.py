@@ -32,7 +32,7 @@ from datetime import datetime
 from typing import Optional
 
 from .cache import Cache
-from .outlets import SPECTRUM_ORDER, lookup as outlet_lookup
+from .outlets import INSTITUTIONAL_TIERS, SPECTRUM_ORDER, lookup as outlet_lookup
 
 
 @dataclass
@@ -230,6 +230,7 @@ def select_diverse(
     n: int = 5,
     require_known: bool = False,
     balance_spectrum: bool = False,
+    balance_tier: bool = False,
 ) -> list[NewsResult]:
     """Pick up to n results, one per outlet, preferring known outlets.
 
@@ -246,9 +247,19 @@ def select_diverse(
     → right) before filling repeats, so the result favors cross-spectrum
     coverage over the relevance-only ranking. Outlets with no lean are
     held until last.
+
+    With balance_tier=True the selection round-robins across
+    institutional-tier buckets (mainstream / public / independent /
+    advocacy / state) instead. This targets the axis the propaganda-model
+    critique cares about — a left-to-right-balanced sample can still be
+    entirely commercial-mainstream. Outlets with no registry entry are
+    held until last. balance_spectrum and balance_tier are mutually
+    exclusive; balance_spectrum wins if both are set.
     """
     if balance_spectrum:
         return _select_spectrum_balanced(results, n=n, require_known=require_known)
+    if balance_tier:
+        return _select_tier_balanced(results, n=n, require_known=require_known)
 
     seen_outlets: set[str] = set()
     selected: list[NewsResult] = []
@@ -330,6 +341,59 @@ def _select_spectrum_balanced(
     return selected
 
 
+def _select_tier_balanced(
+    results: list[NewsResult],
+    *,
+    n: int,
+    require_known: bool,
+) -> list[NewsResult]:
+    """Round-robin across institutional-tier buckets for cross-tier coverage.
+
+    Pass 1 fills one result per (mainstream, public, independent,
+    advocacy, state) bucket, round-robin, until n is reached or every
+    bucket is exhausted of fresh outlets. Pass 2 (skipped if
+    require_known) fills remaining slots from outlets not in the
+    registry.
+    """
+    by_tier: dict[Optional[str], list[NewsResult]] = {
+        t: [] for t in INSTITUTIONAL_TIERS
+    }
+    by_tier[None] = []
+    for r in results:
+        info = outlet_lookup(r.outlet_domain)
+        tier = info.tier if info else None
+        by_tier[tier].append(r)
+
+    seen_outlets: set[str] = set()
+    selected: list[NewsResult] = []
+
+    # Pass 1: round-robin across tier buckets, one outlet per bucket per
+    # cycle, only outlets that are in the registry.
+    while len(selected) < n:
+        progress = False
+        for tier in INSTITUTIONAL_TIERS:
+            picked = _take_next_unique(by_tier[tier], seen_outlets)
+            if picked is not None:
+                selected.append(picked)
+                progress = True
+                if len(selected) >= n:
+                    break
+        if not progress:
+            break
+
+    if require_known:
+        return selected
+
+    # Pass 2: outlets not in the registry, until n is reached.
+    while len(selected) < n:
+        picked = _take_next_unique(by_tier[None], seen_outlets)
+        if picked is None:
+            break
+        selected.append(picked)
+
+    return selected
+
+
 def _take_next_unique(
     bucket: list[NewsResult], seen_outlets: set[str]
 ) -> Optional[NewsResult]:
@@ -354,8 +418,8 @@ def report_selection(selected: list[NewsResult]) -> None:
     for r in selected:
         info = outlet_lookup(r.outlet_domain)
         if info:
-            lean = f" [{info.lean}]" if info.lean else " [no-lean]"
-            label = f"{info.name} ({r.outlet_domain}){lean}"
+            lean = info.lean or "no-lean"
+            label = f"{info.name} ({r.outlet_domain}) [{lean} · {info.tier}]"
         else:
             label = f"{r.outlet_domain} [unknown outlet]"
         title = r.title[:80] if r.title else "(no title)"

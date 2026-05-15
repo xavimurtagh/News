@@ -315,3 +315,59 @@ def test_balance_spectrum_require_known_drops_unleaned():
     )
     # require_known should stop after the leaned-bucket pass; aljazeera dropped.
     assert [r.outlet_domain for r in selected] == ["nytimes.com"]
+
+
+def test_balance_tier_picks_one_per_tier():
+    """With one outlet per institutional tier, tier-balanced picks all five."""
+    results = [
+        _r("nytimes.com"),     # mainstream
+        _r("bbc.com"),         # public
+        _r("propublica.org"),  # independent
+        _r("breitbart.com"),   # advocacy
+        _r("rt.com"),          # state
+    ]
+    selected = select_diverse(results, n=5, balance_tier=True)
+    assert {r.outlet_domain for r in selected} == {
+        "nytimes.com", "bbc.com", "propublica.org", "breitbart.com", "rt.com",
+    }
+
+
+def test_balance_tier_distributes_when_one_tier_dominates():
+    """Non-mainstream tiers get reached before mainstream is piled on."""
+    results = [
+        _r("nytimes.com"),     # mainstream
+        _r("wsj.com"),         # mainstream
+        _r("foxnews.com"),     # mainstream
+        _r("cnn.com"),         # mainstream
+        _r("propublica.org"),  # independent
+    ]
+    selected = select_diverse(results, n=2, balance_tier=True)
+    domains = {r.outlet_domain for r in selected}
+    # Whichever single mainstream outlet was picked, the independent must be in.
+    assert "propublica.org" in domains
+
+
+def test_balance_tier_unknown_outlets_picked_last():
+    """Registered outlets fill tier buckets first; unknowns come after."""
+    results = [
+        _r("unknown-site.example"),
+        _r("nytimes.com"),     # mainstream
+        _r("bbc.com"),         # public
+    ]
+    selected = select_diverse(results, n=3, balance_tier=True)
+    assert {r.outlet_domain for r in selected} == {
+        "unknown-site.example", "nytimes.com", "bbc.com",
+    }
+    first_two = {r.outlet_domain for r in selected[:2]}
+    assert "unknown-site.example" not in first_two
+
+
+def test_balance_tier_require_known_drops_unknowns():
+    results = [
+        _r("unknown-site.example"),
+        _r("nytimes.com"),
+    ]
+    selected = select_diverse(
+        results, n=5, balance_tier=True, require_known=True
+    )
+    assert [r.outlet_domain for r in selected] == ["nytimes.com"]
