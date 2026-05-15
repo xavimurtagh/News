@@ -36,11 +36,18 @@ For each claim, capture:
 - `claim_type`: One of the four categories above.
 - `attributed_to`: For "attributed" claims, the named source (a person, organization, or agency). Otherwise null.
 - `source_quote`: A contiguous span from the article body that contains this claim. MUST appear verbatim in the article — no edits, no ellipses, no paraphrasing. This is the citation back to the source.
+- `provenance`: Where the claim's support comes from, judged ONLY from how this article presents it (not from outside knowledge). One of:
+  - "primary": tied to a primary document, official record, dataset, transcript, court filing, or the reporter's own first-hand observation.
+  - "named": attributed to a named, on-the-record source — a specific person or organization identified by name.
+  - "anonymous": attributed to an unnamed source ("officials said", "a source familiar with the matter", "insiders").
+  - "media": sourced to other news organizations' reporting ("according to the BBC", "as first reported by ...").
+  - "uncited": stated with no basis, source, document, or evidence offered anywhere in the article.
 - `position`: Approximate 1-indexed paragraph number where the claim first appears.
 
 Rules:
 - Only extract claims that are clearly stated in the article. Do not infer, generalize, or add information.
 - `source_quote` must be an exact verbatim substring of the article body. If you cannot find such a span, do not include the claim.
+- Judge `provenance` from the article text alone. If a claim is stated in the article's own voice with no source given, that is "uncited" — do not upgrade it because it sounds plausible or well-known.
 - Break compound sentences into separate atomic claims when each part is independently checkable.
 - Skip headlines, captions, navigation, and metadata. Focus on body prose.
 - Skip pure rhetorical or opinion statements unless they make a specific checkable factual claim.

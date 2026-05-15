@@ -1,13 +1,34 @@
-"""Tests for tier computation and result partitioning."""
+"""Tests for tier computation, grounding, and result partitioning."""
 
 from __future__ import annotations
 
-from news_lens.models import ConsensusTier, CoverageStatus, OutletCoverage
-from news_lens.pipeline import _compute_tier, _partition_results
+from news_lens.models import (
+    ConsensusTier,
+    CoverageStatus,
+    GroundingFlag,
+    OutletCoverage,
+    Provenance,
+)
+from news_lens.pipeline import _compute_grounding, _compute_tier, _partition_results
 
 
 def cov(status: CoverageStatus) -> OutletCoverage:
     return OutletCoverage(outlet_domain="x.com", article_id="a", status=status)
+
+
+def pcov(
+    status: CoverageStatus,
+    provenance: Provenance | None = None,
+    attributed_to: str | None = None,
+    outlet: str = "x.com",
+) -> OutletCoverage:
+    return OutletCoverage(
+        outlet_domain=outlet,
+        article_id="a",
+        status=status,
+        provenance=provenance,
+        attributed_to=attributed_to,
+    )
 
 
 def test_universal_when_every_outlet_asserts():
@@ -96,3 +117,56 @@ def test_partition_results_preserves_alignment():
     results = [{"v": 1}, ValueError("skip"), {"v": 3}]
     keep_items, keep_results = _partition_results(items, results)
     assert list(zip(keep_items, keep_results)) == [(10, {"v": 1}), (30, {"v": 3})]
+
+
+def test_grounding_well_grounded_with_one_primary_source():
+    """A primary-document outlet anchors the claim even if others are weak."""
+    coverage = [
+        pcov(CoverageStatus.ASSERTED, Provenance.PRIMARY, outlet="a.com"),
+        pcov(CoverageStatus.ASSERTED, Provenance.UNCITED, outlet="b.com"),
+    ]
+    assert _compute_grounding(coverage) is GroundingFlag.WELL_GROUNDED
+
+
+def test_grounding_thinly_sourced_when_no_primary_or_named():
+    """Anonymous + other-media + uncited only -> thinly sourced."""
+    coverage = [
+        pcov(CoverageStatus.ASSERTED, Provenance.ANONYMOUS, outlet="a.com"),
+        pcov(CoverageStatus.ASSERTED, Provenance.MEDIA, outlet="b.com"),
+        pcov(CoverageStatus.OMITTED),
+    ]
+    assert _compute_grounding(coverage) is GroundingFlag.THINLY_SOURCED
+
+
+def test_grounding_single_origin_when_all_name_one_source():
+    """Multiple outlets, all attributing to the same named source."""
+    coverage = [
+        pcov(CoverageStatus.ATTRIBUTED, Provenance.NAMED, "The Spokesperson", "a.com"),
+        pcov(CoverageStatus.ATTRIBUTED, Provenance.NAMED, "the spokesperson", "b.com"),
+        pcov(CoverageStatus.ATTRIBUTED, Provenance.NAMED, "The Spokesperson ", "c.com"),
+    ]
+    assert _compute_grounding(coverage) is GroundingFlag.SINGLE_ORIGIN
+
+
+def test_grounding_not_single_origin_with_distinct_named_sources():
+    """Distinct named sources are independent confirmation, not single-origin."""
+    coverage = [
+        pcov(CoverageStatus.ATTRIBUTED, Provenance.NAMED, "Minister A", "a.com"),
+        pcov(CoverageStatus.ATTRIBUTED, Provenance.NAMED, "Official B", "b.com"),
+    ]
+    assert _compute_grounding(coverage) is GroundingFlag.WELL_GROUNDED
+
+
+def test_grounding_single_named_source_one_outlet_is_not_single_origin():
+    """One outlet alone can't be 'single-origin' — that's just single-sourced."""
+    coverage = [
+        pcov(CoverageStatus.ATTRIBUTED, Provenance.NAMED, "Minister A", "a.com"),
+        pcov(CoverageStatus.OMITTED),
+    ]
+    assert _compute_grounding(coverage) is GroundingFlag.WELL_GROUNDED
+
+
+def test_grounding_missing_provenance_treated_as_thin():
+    """Coverage with no provenance data falls back to thinly sourced."""
+    coverage = [cov(CoverageStatus.ASSERTED), cov(CoverageStatus.ASSERTED)]
+    assert _compute_grounding(coverage) is GroundingFlag.THINLY_SOURCED

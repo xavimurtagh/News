@@ -28,6 +28,24 @@ class ClaimType(str, Enum):
     BACKGROUND = "background"
 
 
+class Provenance(str, Enum):
+    """Where a claim's support comes from, judged from the article text.
+
+    This is orthogonal to ClaimType: it answers "how well-sourced is
+    this?" rather than "whose voice states it?". It is the signal that
+    matters most for spotting thinly-grounded or fabricated claims —
+    those rarely trace to a primary document or a named source.
+
+    Ordered strongest grounding to weakest.
+    """
+
+    PRIMARY = "primary"      # primary document, record, dataset, transcript, or first-hand reporting
+    NAMED = "named"          # attributed to a named, on-the-record source
+    ANONYMOUS = "anonymous"  # attributed to an unnamed source
+    MEDIA = "media"          # sourced to other news organizations' reporting
+    UNCITED = "uncited"      # stated with no basis or source offered
+
+
 class CoverageStatus(str, Enum):
     ASSERTED = "asserted"
     ATTRIBUTED = "attributed"
@@ -41,6 +59,20 @@ class ConsensusTier(str, Enum):
     DISPUTED = "disputed"
     SINGLE_SOURCED = "single_sourced"
     ATTRIBUTED_ONLY = "attributed_only"
+
+
+class GroundingFlag(str, Enum):
+    """How well-grounded and how independent a canonical claim is.
+
+    Derived from the per-outlet provenance of a canonical claim. It is
+    deliberately separate from ConsensusTier: a claim can be carried by
+    every outlet (UNIVERSAL) and still be THINLY_SOURCED or
+    SINGLE_ORIGIN — agreement is not the same as evidence.
+    """
+
+    WELL_GROUNDED = "well_grounded"    # at least one outlet ties it to a primary doc or named source
+    SINGLE_ORIGIN = "single_origin"    # multiple outlets carry it, but all trace to one named source
+    THINLY_SOURCED = "thinly_sourced"  # no outlet offers a primary or named basis
 
 
 class Article(BaseModel):
@@ -74,6 +106,14 @@ class ExtractedClaim(BaseModel):
             "Must appear in the article without modification."
         )
     )
+    provenance: Provenance = Field(
+        default=Provenance.UNCITED,
+        description=(
+            "Where the claim's support comes from, judged only from how "
+            "this article presents it: primary document / named source / "
+            "anonymous source / other media / uncited."
+        ),
+    )
     position: int = Field(
         description="Approximate 1-indexed paragraph number where the claim first appears."
     )
@@ -91,6 +131,13 @@ class OutletCoverage(BaseModel):
     status: CoverageStatus
     source_quote: Optional[str] = None
     attributed_to: Optional[str] = None
+    provenance: Optional[Provenance] = Field(
+        default=None,
+        description=(
+            "Where this outlet's version of the claim is sourced from. "
+            "Copied from the originating extracted claim. Null when omitted."
+        ),
+    )
     position: Optional[int] = Field(
         default=None,
         description="1-indexed paragraph position from the source article. Null when omitted.",
@@ -114,10 +161,17 @@ class AlignmentResult(BaseModel):
 
 
 class TieredClaim(BaseModel):
-    """A canonical claim with its computed consensus tier."""
+    """A canonical claim with its computed consensus tier and grounding."""
 
     canonical_text: str
     tier: ConsensusTier
+    grounding: Optional[GroundingFlag] = Field(
+        default=None,
+        description=(
+            "How well-grounded the claim is across outlets. Computed from "
+            "per-outlet provenance; None when provenance was unavailable."
+        ),
+    )
     outlets: List[OutletCoverage]
 
 

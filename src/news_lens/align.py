@@ -66,12 +66,12 @@ For each canonical claim, classify EVERY article's handling as one of:
 - "asserted": The article states this as a fact in its own voice (input claim_type was "asserted").
 - "attributed": The article reports it as a claim by a named source (input claim_type was "attributed"). Set `attributed_to` to the source.
 - "contradicted": The article states something that directly contradicts this claim.
-- "omitted": The article does not mention this claim. Set `source_quote` and `attributed_to` to null.
+- "omitted": The article does not mention this claim. Set `source_quote`, `attributed_to`, and `provenance` to null.
 
 Rules:
 - Two claims are the same canonical claim if they assert the same fact about the same entities, even if phrased differently. Differences in time, place, subject, or predicate make them DIFFERENT canonical claims.
 - "X said Y" in one article and "Y is true" in another describe the SAME proposition but DIFFERENT statuses (attributed vs asserted). Group them as ONE canonical claim with different statuses per outlet.
-- For "asserted", "attributed", or "contradicted" entries, copy `source_quote`, `attributed_to`, and `position` verbatim from the corresponding input claim. Do not paraphrase or recompute. For "omitted" entries, set `position` to null.
+- For "asserted", "attributed", or "contradicted" entries, copy `source_quote`, `attributed_to`, `provenance`, and `position` verbatim from the corresponding input claim. Do not paraphrase or recompute. For "omitted" entries, set `position` and `provenance` to null.
 - `canonical_text` should be a neutral phrasing that abstracts away outlet-specific framing. Avoid loaded language. Strip judgmental adjectives.
 - Do not invent claims that do not appear in any article.
 - Focus on factual claims. Skip pure interpretation or background unless multiple outlets emphasize them.
@@ -180,6 +180,7 @@ def _fallback_alignment(
                     status=status,
                     source_quote=claim.source_quote,
                     attributed_to=claim.attributed_to,
+                    provenance=claim.provenance,
                     position=claim.position,
                 )
             ]

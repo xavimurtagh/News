@@ -16,6 +16,7 @@ from news_lens.models import (
     CoverageStatus,
     ExtractedClaim,
     ExtractionResult,
+    Provenance,
 )
 
 
@@ -31,11 +32,16 @@ def _article(article_id: str, outlet: str) -> Article:
     )
 
 
-def _claim(text: str, claim_type: ClaimType = ClaimType.ASSERTED) -> ExtractedClaim:
+def _claim(
+    text: str,
+    claim_type: ClaimType = ClaimType.ASSERTED,
+    provenance: Provenance = Provenance.UNCITED,
+) -> ExtractedClaim:
     return ExtractedClaim(
         claim_text=text,
         claim_type=claim_type,
         source_quote=text,
+        provenance=provenance,
         position=1,
     )
 
@@ -50,9 +56,17 @@ class _BrokenLLM:
 def test_align_claims_falls_back_when_llm_fails(tmp_path: Path, capsys):
     articles = [_article("a1", "left.example"), _article("a2", "right.example")]
     extractions = {
-        "a1": ExtractionResult(claims=[_claim("Sky is blue.")]),
+        "a1": ExtractionResult(
+            claims=[_claim("Sky is blue.", provenance=Provenance.PRIMARY)]
+        ),
         "a2": ExtractionResult(
-            claims=[_claim("Tax was raised.", ClaimType.ATTRIBUTED)]
+            claims=[
+                _claim(
+                    "Tax was raised.",
+                    ClaimType.ATTRIBUTED,
+                    provenance=Provenance.NAMED,
+                )
+            ]
         ),
     }
 
@@ -81,6 +95,12 @@ def test_align_claims_falls_back_when_llm_fails(tmp_path: Path, capsys):
         "a1": CoverageStatus.OMITTED,
         "a2": CoverageStatus.ATTRIBUTED,
     }
+
+    # The fallback must carry provenance through from the extracted claim.
+    sky_prov = {oc.article_id: oc.provenance for oc in sky.outlets}
+    assert sky_prov == {"a1": Provenance.PRIMARY, "a2": None}
+    tax_prov = {oc.article_id: oc.provenance for oc in tax.outlets}
+    assert tax_prov == {"a1": None, "a2": Provenance.NAMED}
 
 
 def test_align_claims_fallback_handles_empty_extractions(tmp_path: Path):

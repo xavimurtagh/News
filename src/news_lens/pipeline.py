@@ -32,7 +32,9 @@ from .models import (
     CoverageMatrix,
     CoverageStatus,
     ExtractionResult,
+    GroundingFlag,
     OutletCoverage,
+    Provenance,
     SyndicationGroup,
     TieredClaim,
 )
@@ -109,6 +111,53 @@ _TIER_ORDER = {
     ConsensusTier.ATTRIBUTED_ONLY: 3,
     ConsensusTier.SINGLE_SOURCED: 4,
 }
+
+_CARRYING_STATUSES = (
+    CoverageStatus.ASSERTED,
+    CoverageStatus.ATTRIBUTED,
+    CoverageStatus.CONTRADICTED,
+)
+
+
+def _compute_grounding(coverage: list[OutletCoverage]) -> GroundingFlag:
+    """Classify how well-grounded and how independent a canonical claim is.
+
+    Reads the provenance each outlet attached to its version of the
+    claim:
+    - THINLY_SOURCED — no outlet ties the claim to a primary document or
+      a named, on-the-record source. The whole consensus rests on
+      anonymous sources, other media, or bare assertion.
+    - SINGLE_ORIGIN — two or more outlets carry the claim, but every one
+      attributes it to the same named source. The apparent agreement is
+      one source echoed, not independent confirmation — a key way thin
+      or false claims pick up a veneer of consensus.
+    - WELL_GROUNDED — at least one outlet ties it to a primary document
+      or a named source, and it is not single-origin.
+
+    Grounding is independent of ConsensusTier on purpose: a claim every
+    outlet repeats can still be thinly sourced or single-origin.
+    """
+    carrying = [c for c in coverage if c.status in _CARRYING_STATUSES]
+    if not carrying:
+        return GroundingFlag.THINLY_SOURCED
+
+    has_primary = any(c.provenance == Provenance.PRIMARY for c in carrying)
+    named_sources = {
+        c.attributed_to.strip().lower()
+        for c in carrying
+        if c.provenance == Provenance.NAMED and c.attributed_to
+    }
+
+    if not has_primary and not named_sources:
+        return GroundingFlag.THINLY_SOURCED
+    if (
+        len(carrying) >= 2
+        and not has_primary
+        and len(named_sources) == 1
+        and all(c.provenance == Provenance.NAMED for c in carrying)
+    ):
+        return GroundingFlag.SINGLE_ORIGIN
+    return GroundingFlag.WELL_GROUNDED
 
 
 def _partition_results(
@@ -201,6 +250,7 @@ async def _run_async(
         TieredClaim(
             canonical_text=cc.canonical_text,
             tier=_compute_tier(cc.outlets, len(articles), syndication_groups),
+            grounding=_compute_grounding(cc.outlets),
             outlets=cc.outlets,
         )
         for cc in alignment.canonical_claims

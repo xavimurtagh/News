@@ -30,9 +30,11 @@ from .models import (
     CoverageStatus,
     FramingDevice,
     FramingDeviceType,
+    GroundingFlag,
     HeadlineFraming,
     LoadedTerm,
     OutletCoverage,
+    Provenance,
     SyndicationGroup,
     TieredClaim,
 )
@@ -87,6 +89,38 @@ _FRAMING_LABEL = {
     HeadlineFraming.NEUTRAL: "Neutral framing",
     HeadlineFraming.NEGATIVE: "Negative framing",
     HeadlineFraming.MIXED: "Mixed framing",
+}
+
+# Short pill labels for the per-outlet provenance of a claim.
+_PROVENANCE_LABEL = {
+    Provenance.PRIMARY: "Primary source",
+    Provenance.NAMED: "Named source",
+    Provenance.ANONYMOUS: "Anonymous source",
+    Provenance.MEDIA: "Other media",
+    Provenance.UNCITED: "Uncited",
+}
+
+_GROUNDING_LABEL = {
+    GroundingFlag.WELL_GROUNDED: "Grounded",
+    GroundingFlag.SINGLE_ORIGIN: "Single origin",
+    GroundingFlag.THINLY_SOURCED: "Thinly sourced",
+}
+
+_GROUNDING_DESC = {
+    GroundingFlag.WELL_GROUNDED: (
+        "At least one outlet ties this claim to a primary document or a "
+        "named source."
+    ),
+    GroundingFlag.SINGLE_ORIGIN: (
+        "Several outlets carry this claim, but every one attributes it to "
+        "the same named source — shared wording, not independent "
+        "confirmation."
+    ),
+    GroundingFlag.THINLY_SOURCED: (
+        "No outlet ties this claim to a primary document or a named "
+        "source. It rests on anonymous sourcing, other media, or bare "
+        "assertion — weigh it accordingly."
+    ),
 }
 
 _DEVICE_LABEL = {
@@ -381,6 +415,24 @@ details.claim .canonical {
   line-height: 1.4;
   color: var(--text);
 }
+details.claim .claim-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+.grounding-chip {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 9px;
+  white-space: nowrap;
+  cursor: help;
+}
+.grounding-chip.single_origin { background: #fef3c7; color: #92400e; }
+.grounding-chip.thinly_sourced { background: #fde2e1; color: #b3261e; }
 
 .cell {
   display: inline-flex;
@@ -458,6 +510,20 @@ details.claim .canonical {
 .citation .status-pill.attributed { background: var(--status-attributed-bg); color: var(--status-attributed-fg); }
 .citation .status-pill.contradicted { background: var(--status-contradicted-bg); color: var(--status-contradicted-fg); }
 .citation .status-pill.omitted { background: var(--status-omitted-bg); color: var(--status-omitted-fg); }
+.prov-pill {
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: help;
+}
+.prov-pill.primary { background: #e6f4ea; color: #1e6b32; }
+.prov-pill.named { background: #e0ecfb; color: #1f3a5f; }
+.prov-pill.anonymous { background: #fef3c7; color: #92400e; }
+.prov-pill.media { background: #ededea; color: #6b6b66; }
+.prov-pill.uncited { background: #fde2e1; color: #b3261e; }
 .citation blockquote {
   margin: 0;
   font-family: Georgia, "Times New Roman", serif;
@@ -495,6 +561,19 @@ details.claim .canonical {
   margin-top: 10px;
 }
 .legend .item { display: inline-flex; align-items: center; gap: 6px; }
+.legend .legend-label {
+  font-weight: 700;
+  color: var(--text);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.legend.grounding-legend {
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+.legend.grounding-legend .item { align-items: baseline; }
 
 .fingerprints {
   display: grid;
@@ -990,6 +1069,14 @@ def _render_citations(
                 f'<blockquote class="empty">— ({status_label.lower()})</blockquote>'
             )
 
+        prov_html = ""
+        if cov.provenance is not None:
+            prov_html = (
+                f'<span class="prov-pill {cov.provenance.value}" '
+                f'title="How this outlet sources the claim">'
+                f"{_esc(_PROVENANCE_LABEL[cov.provenance])}</span>"
+            )
+
         attr_html = ""
         if cov.attributed_to:
             attr_html = (
@@ -1012,6 +1099,7 @@ def _render_citations(
             f'<div class="outlet-cell">'
             f'<span>{_esc(outlet_friendly)}</span>'
             f'<span class="status-pill {status_cls}">{_esc(status_label)}</span>'
+            f"{prov_html}"
             f"{framing_html}"
             f"{position_html}"
             f"</div>"
@@ -1019,6 +1107,21 @@ def _render_citations(
             f"</div>"
         )
     return f'<div class="citations">{"".join(parts)}</div>'
+
+
+def _grounding_chip(grounding: GroundingFlag | None) -> str:
+    """A warning chip for thinly-sourced or single-origin claims.
+
+    Well-grounded claims get no chip — the absence is the signal, and a
+    chip on every row would just be noise.
+    """
+    if grounding is None or grounding == GroundingFlag.WELL_GROUNDED:
+        return ""
+    return (
+        f'<span class="grounding-chip {grounding.value}" '
+        f'title="{_esc(_GROUNDING_DESC[grounding])}">'
+        f"{_esc(_GROUNDING_LABEL[grounding])}</span>"
+    )
 
 
 def _render_claim(
@@ -1032,7 +1135,10 @@ def _render_claim(
     return (
         f'<details class="claim">'
         f'<summary style="{grid}">'
+        f'<span class="claim-head">'
         f'<span class="canonical">{_esc(claim.canonical_text)}</span>'
+        f"{_grounding_chip(claim.grounding)}"
+        f"</span>"
         f"{cells}"
         f"</summary>"
         f"{_render_citations(claim, outlet_order, articles_by_id, lenses_by_id)}"
@@ -1146,7 +1252,36 @@ def _render_legend() -> str:
             f"{_esc(_STATUS_LABEL[status])}"
             f"</span>"
         )
-    return f'<div class="legend">{"".join(items)}</div>'
+    status_row = f'<div class="legend">{"".join(items)}</div>'
+
+    prov_items = ['<span class="legend-label">Sourcing</span>']
+    for prov in (
+        Provenance.PRIMARY,
+        Provenance.NAMED,
+        Provenance.ANONYMOUS,
+        Provenance.MEDIA,
+        Provenance.UNCITED,
+    ):
+        prov_items.append(
+            f'<span class="item">'
+            f'<span class="prov-pill {prov.value}">'
+            f"{_esc(_PROVENANCE_LABEL[prov])}</span>"
+            f"</span>"
+        )
+    prov_row = f'<div class="legend">{"".join(prov_items)}</div>'
+
+    grounding_items = []
+    for flag in (GroundingFlag.SINGLE_ORIGIN, GroundingFlag.THINLY_SOURCED):
+        grounding_items.append(
+            f'<span class="item">'
+            f'<span class="grounding-chip {flag.value}">'
+            f"{_esc(_GROUNDING_LABEL[flag])}</span>"
+            f"<span>{_esc(_GROUNDING_DESC[flag])}</span>"
+            f"</span>"
+        )
+    grounding_row = f'<div class="legend grounding-legend">{"".join(grounding_items)}</div>'
+
+    return status_row + prov_row + grounding_row
 
 
 def _compute_fingerprints(
