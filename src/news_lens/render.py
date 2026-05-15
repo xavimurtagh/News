@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import html
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Iterable
 
@@ -38,6 +38,7 @@ from .models import (
     SyndicationGroup,
     TieredClaim,
 )
+from .outlets import SPECTRUM_ORDER
 from .outlets import display_name as _outlet_display_name
 from .outlets import lookup as _outlet_lookup
 
@@ -55,7 +56,11 @@ _TIER_LABELS = {
 }
 
 _TIER_DESCRIPTIONS = {
-    ConsensusTier.UNIVERSAL: "Asserted as fact by every covering outlet.",
+    ConsensusTier.UNIVERSAL: (
+        "Every outlet asserts this as fact and none question it. Shared "
+        "ground like this is the least scrutinised by readers — and "
+        "therefore the most worth examining."
+    ),
     ConsensusTier.MAJORITY: "Asserted by most outlets; some omit it.",
     ConsensusTier.DISPUTED: "At least one outlet contradicts another.",
     ConsensusTier.ATTRIBUTED_ONLY: "No outlet asserts as fact; only quoted from sources.",
@@ -151,7 +156,7 @@ _DEVICE_GROUP = {
 }
 
 _SUMMARY_HEADINGS = {
-    ConsensusTier.UNIVERSAL: "What every outlet agreed on",
+    ConsensusTier.UNIVERSAL: "Shared assumptions — asserted by all, questioned by none",
     ConsensusTier.MAJORITY: "What most outlets agreed on",
     ConsensusTier.DISPUTED: "Where outlets disagreed",
     ConsensusTier.ATTRIBUTED_ONLY: "Quoted positions only — no outlet asserted as fact",
@@ -247,6 +252,52 @@ section h2 {
   text-transform: uppercase;
   color: var(--text-muted);
   margin: 0 0 12px;
+}
+.section-note {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 12px;
+  max-width: 64ch;
+}
+
+.sample-banner {
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--accent);
+  background: #f4f6f9;
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin-bottom: 24px;
+}
+.sample-banner-head {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.sample-stats {
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.sample-notes {
+  margin: 8px 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.sample-notes li { margin: 3px 0; }
+.sample-caveat {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-muted);
+  line-height: 1.5;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin-top: 8px;
 }
 
 .articles {
@@ -1463,6 +1514,112 @@ def _render_fingerprints(matrix: CoverageMatrix, outlet_order: list[str]) -> str
     return f'<div class="fingerprints">{"".join(rows)}</div>'
 
 
+def _render_sample_banner(matrix: CoverageMatrix) -> str:
+    """Describe the shape of the sampled outlets, honestly and up front.
+
+    A coverage analysis can only reflect the outlets it drew from. If the
+    sample is all one lean, all commercial-mainstream, or mostly
+    unclassified, the reader needs to know that before reading any
+    "every outlet agreed" line — otherwise the report quietly implies a
+    breadth it doesn't have.
+    """
+    domains: list[str] = []
+    seen: set[str] = set()
+    for a in matrix.articles:
+        if a.outlet_domain not in seen:
+            seen.add(a.outlet_domain)
+            domains.append(a.outlet_domain)
+    n = len(domains)
+    if n == 0:
+        return ""
+
+    infos = {d: _outlet_lookup(d) for d in domains}
+    known = [i for i in infos.values() if i is not None]
+    untagged = [d for d, i in infos.items() if i is None]
+
+    lean_counts = Counter(i.lean for i in known if i.lean)
+    tier_counts = Counter(i.tier for i in known)
+    countries = sorted({i.country for i in known})
+
+    lean_parts = [f"{lean_counts[l]} {l}" for l in SPECTRUM_ORDER if lean_counts[l]]
+    lean_str = ", ".join(lean_parts) if lean_parts else "none rated"
+    tier_str = (
+        ", ".join(f"{c} {t}" for t, c in tier_counts.most_common())
+        if tier_counts
+        else "none classified"
+    )
+
+    stat_bits = [
+        f"<strong>{n}</strong> outlet{'' if n == 1 else 's'}",
+        f"lean: {_esc(lean_str)}",
+        f"institutional tier: {_esc(tier_str)}",
+    ]
+    if countries:
+        stat_bits.append(f"countries: {_esc(', '.join(countries))}")
+    stats_html = " · ".join(stat_bits)
+
+    notes: list[str] = []
+    left_present = bool(lean_counts["left"] or lean_counts["center-left"])
+    right_present = bool(lean_counts["center-right"] or lean_counts["right"])
+    if known:
+        if not left_present and not right_present:
+            notes.append(
+                "Every rated outlet sits at the centre — neither the left "
+                "nor the right of the spectrum is represented."
+            )
+        elif not right_present:
+            notes.append(
+                "No outlet right of centre is represented; on the "
+                "left–right axis this sample leans left."
+            )
+        elif not left_present:
+            notes.append(
+                "No outlet left of centre is represented; on the "
+                "left–right axis this sample leans right."
+            )
+
+    non_mainstream = sum(c for t, c in tier_counts.items() if t != "mainstream")
+    if known and non_mainstream == 0:
+        notes.append(
+            "Every classified outlet is commercial-mainstream — no "
+            "independent, public-broadcast, advocacy, or state outlet is "
+            "represented. Agreement across this sample can still reflect "
+            "assumptions shared across the mainstream press."
+        )
+
+    if untagged:
+        verb = "is" if len(untagged) == 1 else "are"
+        notes.append(
+            f"{len(untagged)} of the {n} outlets {verb} not in the registry, "
+            "so their lean and institutional tier are unknown and they were "
+            "excluded from the figures above."
+        )
+
+    if len(countries) == 1:
+        notes.append(
+            f"All classified outlets are based in one country "
+            f"({_esc(countries[0])}); non-domestic perspectives are absent."
+        )
+
+    notes_html = ""
+    if notes:
+        items = "".join(f"<li>{_esc(t)}</li>" for t in notes)
+        notes_html = f'<ul class="sample-notes">{items}</ul>'
+
+    return (
+        '<div class="sample-banner">'
+        '<div class="sample-banner-head">About this sample</div>'
+        f'<div class="sample-stats">{stats_html}</div>'
+        f"{notes_html}"
+        '<div class="sample-caveat">'
+        "A coverage analysis can only reflect the outlets it sampled. Read "
+        "the agreements, disputes, and omissions below in light of who is — "
+        "and who is not — represented here."
+        "</div>"
+        "</div>"
+    )
+
+
 def render_html(matrix: CoverageMatrix) -> str:
     outlet_order = _outlet_order(matrix.articles)
     n_articles = len(matrix.articles)
@@ -1497,6 +1654,7 @@ def render_html(matrix: CoverageMatrix) -> str:
         f' · {n_claims} canonical claim{"" if n_claims == 1 else "s"}'
         f" · generated {_esc(generated)}</div>"
         "</header>"
+        f"{_render_sample_banner(matrix)}"
         "<section>"
         "<h2>Articles</h2>"
         f"{_render_articles(matrix.articles, outlet_order, matrix.syndication_groups, matrix.lenses)}"
@@ -1507,6 +1665,13 @@ def render_html(matrix: CoverageMatrix) -> str:
         "</section>"
         "<section>"
         "<h2>Coverage Matrix</h2>"
+        '<p class="section-note">'
+        "Each row is a claim some outlet made. The bold line is a plain "
+        "descriptive handle used only to group outlets covering the same "
+        "point — it is not a neutral or verified version of the claim. "
+        "Expand any row to read the verbatim wording each outlet actually "
+        "used, side by side."
+        "</p>"
         f"{_render_matrix(matrix, outlet_order)}"
         f"{_render_legend()}"
         "</section>"

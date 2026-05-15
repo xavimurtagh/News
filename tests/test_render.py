@@ -154,8 +154,10 @@ def test_render_includes_expected_sections():
 
 def test_summary_groups_by_tier():
     html_doc = render_html(_matrix())
-    # The synthetic _matrix has a single universal claim.
-    assert "What every outlet agreed on" in html_doc
+    # The synthetic _matrix has a single universal claim. The universal
+    # tier is framed as shared, unexamined assumptions rather than
+    # "what everyone agreed on".
+    assert "Shared assumptions" in html_doc
     assert "summary-tier" in html_doc
     # Ensure the canonical text appears in the summary section, not just the matrix.
     assert html_doc.count("Something happened.") >= 2  # summary + matrix
@@ -211,3 +213,51 @@ def test_render_framing_devices():
     assert html_doc.count('class="framing-device"') == 2
     # Selective hedging is a "meta" group; its border should be amber.
     assert 'data-group="meta"' in html_doc
+
+
+def _banner_matrix(domains: list[str]) -> CoverageMatrix:
+    now = datetime(2026, 5, 15, tzinfo=timezone.utc)
+    articles = [
+        Article(
+            id=f"a{i}", url=f"https://{d}/x", outlet_domain=d,
+            title=f"Story {i}", fetched_at=now, body="b", paragraph_count=2,
+        )
+        for i, d in enumerate(domains)
+    ]
+    return CoverageMatrix(articles=articles, claims=[])
+
+
+def test_sample_banner_flags_left_skewed_sample():
+    """A sample with no right-of-centre outlet says so."""
+    from news_lens.render import _render_sample_banner
+
+    banner = _render_sample_banner(
+        _banner_matrix(["theguardian.com", "msnbc.com", "vox.com"])
+    )
+    assert "About this sample" in banner
+    assert "leans left" in banner
+
+
+def test_sample_banner_flags_all_mainstream():
+    """A sample with only mainstream-tier outlets is flagged."""
+    from news_lens.render import _render_sample_banner
+
+    banner = _render_sample_banner(
+        _banner_matrix(["nytimes.com", "wsj.com", "foxnews.com"])
+    )
+    assert "commercial-mainstream" in banner
+
+
+def test_sample_banner_flags_untagged_outlets():
+    """Outlets not in the registry are surfaced as unclassified."""
+    from news_lens.render import _render_sample_banner
+
+    banner = _render_sample_banner(
+        _banner_matrix(["nytimes.com", "some-random-blog.example"])
+    )
+    assert "not in the registry" in banner
+
+
+def test_sample_banner_appears_in_full_render():
+    html_doc = render_html(_banner_matrix(["nytimes.com", "foxnews.com"]))
+    assert "About this sample" in html_doc
