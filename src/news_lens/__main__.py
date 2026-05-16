@@ -151,6 +151,7 @@ def _build_backend(args: argparse.Namespace):
             base_url=args.base_url,
             model=args.model,
             api_key=api_key,
+            max_concurrency=args.max_concurrency,
         )
 
     raise SystemExit(f"error: unknown backend {args.backend!r}")
@@ -219,6 +220,16 @@ def main() -> int:
         help="Env var holding the API key for openai-compatible backend "
         "(e.g. GROQ_API_KEY, OPENROUTER_API_KEY). Omit for local servers "
         "that do not require auth.",
+    )
+    parser.add_argument(
+        "--max-concurrency",
+        type=int,
+        default=2,
+        help="Max simultaneous LLM requests for the openai-compatible "
+        "backend (default: 2). A local Ollama server holds one model and "
+        "serializes work anyway; too many in-flight requests inflate "
+        "memory and can crash it mid-run. Lower to 1 on a low-RAM machine; "
+        "raise it for a hosted endpoint that scales.",
     )
     parser.add_argument(
         "--search",

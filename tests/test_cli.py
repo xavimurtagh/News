@@ -21,6 +21,7 @@ def _ns(**overrides):
         base_url=None,
         model=None,
         api_key_env=None,
+        max_concurrency=2,
     )
     base.update(overrides)
     return argparse.Namespace(**base)
@@ -162,3 +163,20 @@ def test_strip_line_continuations_handles_double_backslash():
     cleaned, n = _strip_line_continuations(["--search", "x", "\\\\", "--ollama"])
     assert cleaned == ["--search", "x", "--ollama"]
     assert n == 1
+
+
+def test_max_concurrency_passed_to_openai_backend():
+    """--max-concurrency reaches the openai-compatible backend constructor."""
+    captured = {}
+
+    class _Stub:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            self.name = "stub"
+
+    with patch(
+        "news_lens.backends.openai_compatible.OpenAICompatibleBackend", _Stub
+    ):
+        _build_backend(_ns(ollama=True, max_concurrency=1))
+
+    assert captured["max_concurrency"] == 1
