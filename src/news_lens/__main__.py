@@ -246,6 +246,15 @@ def main() -> int:
         "article per outlet, prioritizing outlets in the registry.",
     )
     parser.add_argument(
+        "--days",
+        type=int,
+        default=14,
+        help="With --search, only return articles published in the last N "
+        "days (default: 14). Without a window GDELT matches across years "
+        "and a short query like 'morales arrest' returns unrelated stories "
+        "from different events. Pass 0 to disable the window.",
+    )
+    parser.add_argument(
         "--require-known-outlets",
         action="store_true",
         help="With --search, only include outlets in the registry "
@@ -293,10 +302,15 @@ def main() -> int:
         )
 
     if args.search:
-        print(f"Searching GDELT for: {args.search!r}", file=sys.stderr)
+        days = args.days if args.days > 0 else None
+        window_label = f"last {args.days}d" if days else "all time"
+        print(
+            f"Searching GDELT for: {args.search!r} ({window_label})",
+            file=sys.stderr,
+        )
         search_cache = Cache(args.cache_dir)
         results = asyncio.run(
-            search(args.search, max_results=30, cache=search_cache)
+            search(args.search, max_results=30, days=days, cache=search_cache)
         )
         outlets_found = {r.outlet_domain for r in results}
         print(

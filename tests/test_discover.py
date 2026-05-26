@@ -264,7 +264,7 @@ def test_search_uses_cache_on_repeat(tmp_path: Path):
     }
     call_count = {"n": 0}
 
-    def fake_fetch(query, max_records, max_retries=4, sleep=None):
+    def fake_fetch(query, max_records, days=14, now=None, max_retries=4, sleep=None):
         call_count["n"] += 1
         return cached_payload
 
@@ -371,3 +371,81 @@ def test_balance_tier_require_known_drops_unknowns():
         results, n=5, balance_tier=True, require_known=True
     )
     assert [r.outlet_domain for r in selected] == ["nytimes.com"]
+
+
+def test_fetch_gdelt_default_window_includes_dates():
+    """The default 14-day window passes start/end datetime to GDELT."""
+    captured: dict = {}
+
+    def fake_urlopen(req, timeout):
+        captured["url"] = req.full_url
+
+        class _Resp:
+            def __enter__(self_inner):
+                return self_inner
+
+            def __exit__(self_inner, *args):
+                return None
+
+            def read(self_inner):
+                return b'{"articles": []}'
+
+        return _Resp()
+
+    fixed_now = datetime(2026, 5, 20, 12, 0, 0)
+    with patch("news_lens.discover.urllib.request.urlopen", fake_urlopen):
+        _fetch_gdelt("hello", 5, days=14, now=fixed_now, sleep=lambda _: None)
+
+    url = captured["url"]
+    assert "startdatetime=20260506120000" in url
+    assert "enddatetime=20260520120000" in url
+
+
+def test_fetch_gdelt_days_none_disables_window():
+    """`days=None` omits the GDELT date params entirely."""
+    captured: dict = {}
+
+    def fake_urlopen(req, timeout):
+        captured["url"] = req.full_url
+
+        class _Resp:
+            def __enter__(self_inner):
+                return self_inner
+
+            def __exit__(self_inner, *args):
+                return None
+
+            def read(self_inner):
+                return b'{"articles": []}'
+
+        return _Resp()
+
+    with patch("news_lens.discover.urllib.request.urlopen", fake_urlopen):
+        _fetch_gdelt("hello", 5, days=None, sleep=lambda _: None)
+
+    url = captured["url"]
+    assert "startdatetime" not in url
+    assert "enddatetime" not in url
+
+
+def test_search_cache_keys_separate_by_window(tmp_path: Path):
+    """Different `days` windows must not collide in the search cache."""
+    import asyncio as _asyncio
+
+    from news_lens.cache import Cache
+    from news_lens.discover import search
+
+    call_count = {"n": 0}
+
+    def fake_fetch(query, max_records, days=14, now=None, max_retries=4, sleep=None):
+        call_count["n"] += 1
+        return {"articles": [{"url": f"https://x/{days}", "domain": "x.com"}]}
+
+    cache = Cache(tmp_path)
+    with patch("news_lens.discover._fetch_gdelt", fake_fetch):
+        _asyncio.run(search("topic", max_results=5, days=7, cache=cache))
+        _asyncio.run(search("topic", max_results=5, days=14, cache=cache))
+        # Repeat the 7-day window — should hit the cache, not the network.
+        _asyncio.run(search("topic", max_results=5, days=7, cache=cache))
+
+    assert call_count["n"] == 2  # two distinct windows hit the network once each

@@ -28,7 +28,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from .cache import Cache
@@ -67,9 +67,18 @@ def _fetch_gdelt(
     query: str,
     max_records: int,
     *,
+    days: Optional[int] = 14,
+    now: Optional[datetime] = None,
     max_retries: int = 4,
     sleep: callable = time.sleep,
 ) -> dict:
+    """Hit the GDELT Doc API. `days` constrains the search window in UTC.
+
+    A keyword query without a date window pulls matches across the entire
+    GDELT archive (years), which is how a search for "morales arrest"
+    glues a Bolivia 2026 story to a Texas 2026 story to a 2015 Baseball
+    story. Default to a 14-day window; pass `days=None` to disable.
+    """
     params = {
         "query": query,
         "mode": "ArtList",
@@ -77,6 +86,12 @@ def _fetch_gdelt(
         "maxrecords": str(max_records),
         "sort": "HybridRel",  # relevance + freshness
     }
+    if days is not None and days > 0:
+        end = now or datetime.utcnow()
+        start = end - timedelta(days=days)
+        # GDELT expects YYYYMMDDHHMMSS in UTC.
+        params["startdatetime"] = start.strftime("%Y%m%d%H%M%S")
+        params["enddatetime"] = end.strftime("%Y%m%d%H%M%S")
     url = f"{_GDELT_URL}?{urllib.parse.urlencode(params)}"
 
     last_err: Optional[BaseException] = None
@@ -165,35 +180,43 @@ def _deserialize_result(d: dict) -> NewsResult:
     )
 
 
-def _cache_key(query: str, max_results: int) -> str:
-    return hashlib.sha256(f"{query}::{max_results}".encode("utf-8")).hexdigest()[:24]
+def _cache_key(query: str, max_results: int, days: Optional[int]) -> str:
+    return hashlib.sha256(
+        f"{query}::{max_results}::days={days}".encode("utf-8")
+    ).hexdigest()[:24]
 
 
 async def search(
     query: str,
     *,
     max_results: int = 30,
+    days: Optional[int] = 14,
     cache: Optional[Cache] = None,
 ) -> list[NewsResult]:
-    """Search GDELT for articles matching the query.
+    """Search GDELT for articles matching the query within the last `days`.
 
     Returns up to max_results articles, ordered by GDELT's HybridRel
     score (relevance + freshness). Each result has the article URL,
     outlet domain (lowercased, www. stripped), title, and publish date
     if available.
 
+    `days` constrains the time window in UTC (default 14). Without one,
+    GDELT returns matches across the entire archive — that is the
+    primary cause of topically-mixed results for short queries.
+    Pass `days=None` to disable the window.
+
     Passing a `cache` short-circuits the network call for repeat queries:
-    the same query at the same max_results returns the cached results
-    forever. Delete the .cache directory (or just the gdelt namespace)
-    to force a refresh.
+    the same query at the same max_results AND the same `days` window
+    returns the cached results. The cache key includes the window so
+    different windows don't collide.
     """
-    key = _cache_key(query, max_results)
+    key = _cache_key(query, max_results, days)
     if cache is not None:
         cached = cache.get("gdelt", key)
         if cached is not None:
             return [_deserialize_result(d) for d in cached]
 
-    raw = await asyncio.to_thread(_fetch_gdelt, query, max_results)
+    raw = await asyncio.to_thread(_fetch_gdelt, query, max_results, days=days)
     results: list[NewsResult] = []
     for art in raw.get("articles", []):
         url = (art.get("url") or "").strip()
