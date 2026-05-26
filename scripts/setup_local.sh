@@ -71,5 +71,9 @@ ollama pull "$MODEL"
 
 echo
 echo "Ready. Ollama is serving $MODEL at http://localhost:11434/v1"
-echo "Run the pipeline with:"
+echo
+echo "Strongly recommended (deterministic alignment + topical search clustering):"
+echo "  pip install -e \".[local-llm,embeddings]\""
+echo
+echo "Then run the pipeline with:"
 echo "  python -m news_lens URL1 URL2 URL3 --ollama --model $MODEL --html out.html"

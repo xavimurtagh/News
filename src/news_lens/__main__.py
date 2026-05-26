@@ -20,7 +20,14 @@ Claude (default; requires ANTHROPIC_API_KEY):
 
 Local Llama via Ollama (zero subscriptions, runs on your machine):
     bash scripts/setup_local.sh
+    pip install -e ".[local-llm,embeddings]"
     python -m news_lens URL1 URL2 URL3 --ollama --html out.html
+
+The `[embeddings]` extra installs sentence-transformers. It is
+strongly recommended: the alignment step uses it (deterministic,
+won't hallucinate outlets) and the search step uses it to cluster
+results by topic so a query like "morales arrest" doesn't mix
+Bolivia, Texas, and Toledo stories.
 
 The `--ollama` flag is shorthand for `--backend openai-compatible
 --base-url http://localhost:11434/v1`. Default model is qwen3:8b
