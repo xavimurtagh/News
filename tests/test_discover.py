@@ -11,6 +11,8 @@ import json
 import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
+
+import pytest
 from unittest.mock import patch
 
 from news_lens.cache import Cache
@@ -449,3 +451,57 @@ def test_search_cache_keys_separate_by_window(tmp_path: Path):
         _asyncio.run(search("topic", max_results=5, days=7, cache=cache))
 
     assert call_count["n"] == 2  # two distinct windows hit the network once each
+
+
+def test_cluster_by_event_groups_similar_titles():
+    """Embedding-backed clustering keeps same-event titles together."""
+    from unittest.mock import patch
+    from news_lens.discover import cluster_by_event
+
+    np = pytest.importorskip("numpy")
+    results = [
+        _r("a.com", "Evo Morales arrest warrant reissued by Bolivian judge"),
+        _r("b.com", "Bolivia issues warrant for Evo Morales after court no-show"),
+        _r("c.com", "Baby Jessica, now 40, arrested in Texas"),
+        _r("d.com", "Toledo man arrested after SWAT standoff"),
+    ]
+
+    class _Stub:
+        def encode(self, texts, convert_to_numpy=True, normalize_embeddings=True):
+            mapping = {
+                results[0].title: [1.0, 0.0, 0.0],
+                results[1].title: [0.95, 0.05, 0.0],
+                results[2].title: [0.0, 1.0, 0.0],
+                results[3].title: [0.0, 0.0, 1.0],
+            }
+            return np.stack([
+                np.array(mapping[t], dtype=np.float32) /
+                (np.linalg.norm(mapping[t]) + 1e-12) for t in texts
+            ])
+
+    with patch("news_lens.align_embeddings.is_available", return_value=True), \
+         patch("news_lens.align_embeddings._load_model", return_value=_Stub()):
+        clusters = cluster_by_event(results, threshold=0.7)
+
+    assert len(clusters) == 3  # Bolivia pair + Baby Jessica + Toledo
+    assert len(clusters[0]) == 2  # largest is the Bolivia cluster
+    domains = {r.outlet_domain for r in clusters[0]}
+    assert domains == {"a.com", "b.com"}
+
+
+def test_cluster_by_event_returns_single_cluster_when_embeddings_unavailable():
+    """Without sentence-transformers, results pass through as one cluster."""
+    from unittest.mock import patch
+    from news_lens.discover import cluster_by_event
+
+    results = [_r("a.com"), _r("b.com")]
+    with patch("news_lens.align_embeddings.is_available", return_value=False):
+        clusters = cluster_by_event(results)
+
+    assert clusters == [results]
+
+
+def test_cluster_by_event_empty_input():
+    from news_lens.discover import cluster_by_event
+
+    assert cluster_by_event([]) == []

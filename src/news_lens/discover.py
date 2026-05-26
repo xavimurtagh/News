@@ -433,6 +433,66 @@ def _take_next_unique(
     return None
 
 
+def cluster_by_event(
+    results: list[NewsResult],
+    *,
+    threshold: float = 0.55,
+    model_name: Optional[str] = None,
+) -> list[list[NewsResult]]:
+    """Group results that look like coverage of the same event.
+
+    GDELT's free-text matching returns articles that share keywords but
+    not subject matter — a "morales arrest" query glues a Bolivia case
+    to a Texas case to a Toledo SWAT standoff. Cosine similarity over
+    the article titles separates them.
+
+    Returns clusters ordered largest-first. If sentence-transformers
+    isn't installed, returns `[results]` so the caller still gets
+    something usable (just without the topical separation).
+    """
+    from . import align_embeddings
+
+    if not results:
+        return []
+    if not align_embeddings.is_available():
+        return [list(results)]
+
+    import numpy as np
+
+    model = align_embeddings._load_model(
+        model_name or align_embeddings.DEFAULT_MODEL
+    )
+    titles = [r.title or "" for r in results]
+    embeddings = model.encode(
+        titles, convert_to_numpy=True, normalize_embeddings=True
+    )
+    sim = embeddings @ embeddings.T
+
+    n = len(results)
+    parent = list(range(n))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(i: int, j: int) -> None:
+        ri, rj = find(i), find(j)
+        if ri != rj:
+            parent[ri] = rj
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if sim[i, j] >= threshold:
+                union(i, j)
+
+    groups: dict[int, list[NewsResult]] = {}
+    for i, r in enumerate(results):
+        groups.setdefault(find(i), []).append(r)
+    return sorted(groups.values(), key=len, reverse=True)
+
+
 def report_selection(selected: list[NewsResult]) -> None:
     """Print a one-line-per-source summary to stderr."""
     if not selected:

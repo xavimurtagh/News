@@ -54,13 +54,19 @@ from pathlib import Path
 import asyncio
 
 from .cache import Cache
-from .discover import report_selection, search, select_diverse
+from .discover import cluster_by_event, report_selection, search, select_diverse
 from .pipeline import run_pipeline
 from .render import render_html
 
 
 _OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434/v1"
 _OLLAMA_DEFAULT_MODEL = "qwen3:8b"
+
+
+def _embeddings_installed() -> bool:
+    from .align_embeddings import is_available
+
+    return is_available()
 
 
 def _strip_line_continuations(argv: list[str]) -> tuple[list[str], int]:
@@ -255,6 +261,22 @@ def main() -> int:
         "from different events. Pass 0 to disable the window.",
     )
     parser.add_argument(
+        "--no-cluster",
+        action="store_true",
+        help="Disable topical clustering of search results. By default, "
+        "when news-lens[embeddings] is installed, search results are "
+        "clustered by title similarity and only the largest cluster is "
+        "kept — this stops keyword collisions (different events sharing a "
+        "surname) from polluting the analysis.",
+    )
+    parser.add_argument(
+        "--require-coherence",
+        action="store_true",
+        help="With --search, error out if the largest event cluster covers "
+        "less than 50%% of the search results. Use when you want the run "
+        "to fail loud rather than analyze a topically-mixed sample.",
+    )
+    parser.add_argument(
         "--require-known-outlets",
         action="store_true",
         help="With --search, only include outlets in the registry "
@@ -317,6 +339,37 @@ def main() -> int:
             f"  found {len(results)} articles across {len(outlets_found)} outlet(s)",
             file=sys.stderr,
         )
+
+        if not args.no_cluster and results:
+            clusters = cluster_by_event(results)
+            if len(clusters) > 1:
+                primary = clusters[0]
+                fraction = len(primary) / len(results)
+                print(
+                    f"  GDELT results span {len(clusters)} event cluster(s); "
+                    f"keeping the largest ({len(primary)} of {len(results)} "
+                    f"articles, {fraction:.0%}). Other clusters were dropped "
+                    "because they look like different stories that share "
+                    "keywords.",
+                    file=sys.stderr,
+                )
+                if args.require_coherence and fraction < 0.5:
+                    raise SystemExit(
+                        f"error: the largest event cluster is only "
+                        f"{fraction:.0%} of the search results "
+                        "(--require-coherence threshold is 50%). The query "
+                        "is too broad or too generic — try adding a "
+                        "distinguishing entity, location, or date hint."
+                    )
+                results = primary
+            elif len(clusters) == 1 and results and not _embeddings_installed():
+                print(
+                    "  (install news-lens[embeddings] for topical clustering "
+                    "of search results; without it broad queries can mix "
+                    "unrelated events.)",
+                    file=sys.stderr,
+                )
+
         selected = select_diverse(
             results,
             n=args.max_sources,
