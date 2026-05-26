@@ -41,6 +41,7 @@ A/B comparisons easy.
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import json
 import sys
@@ -164,6 +165,23 @@ async def align_claims(
                 oc = oc.model_copy(update={"outlet_domain": expected_domain})
             clean_outlets.append(oc)
 
+        # If the LLM produced canonical_text but no outlets at all (the
+        # single most common failure mode in real samples), recover by
+        # fuzzy-matching the canonical_text against each article's
+        # extracted claims and attaching the originating article.
+        # Without this, the matrix would mark every outlet OMITTED and
+        # the report becomes useless.
+        if not clean_outlets:
+            clean_outlets = _recover_outlets_by_similarity(
+                cc.canonical_text, articles, extractions
+            )
+            if clean_outlets:
+                print(
+                    f"WARN: LLM returned no outlets for {cc.canonical_text[:60]!r}; "
+                    f"recovered {len(clean_outlets)} by fuzzy claim match",
+                    file=sys.stderr,
+                )
+
         present = {oc.article_id for oc in clean_outlets}
         outlets = list(clean_outlets)
         for aid in article_ids:
@@ -180,6 +198,57 @@ async def align_claims(
     result = AlignmentResult(canonical_claims=filled)
     cache.set("alignments", result.model_dump(mode="json"), payload_hash, _PROMPT_HASH, llm.name)
     return result
+
+
+_RECOVERY_SIMILARITY_THRESHOLD = 0.6
+
+
+def _recover_outlets_by_similarity(
+    canonical_text: str,
+    articles: list[Article],
+    extractions: Mapping[str, ExtractionResult],
+) -> list[OutletCoverage]:
+    """Reattach outlet coverage by fuzzy-matching against extracted claims.
+
+    Used when the alignment LLM returns a canonical claim with an empty
+    `outlets` list. Walks each article's extracted claims, scores them
+    against `canonical_text` with difflib's SequenceMatcher ratio, and
+    attaches the best match per article if its similarity meets the
+    threshold. Status, quote, attribution, position, and provenance are
+    copied verbatim from the matched extracted claim — no field is
+    invented.
+    """
+    recovered: list[OutletCoverage] = []
+    canonical_lower = canonical_text.lower()
+    for article in articles:
+        best_ratio = 0.0
+        best_claim = None
+        for claim in extractions[article.id].claims:
+            ratio = difflib.SequenceMatcher(
+                None, canonical_lower, claim.claim_text.lower()
+            ).ratio()
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_claim = claim
+        if best_claim is None or best_ratio < _RECOVERY_SIMILARITY_THRESHOLD:
+            continue
+        status = (
+            CoverageStatus.ATTRIBUTED
+            if best_claim.claim_type == ClaimType.ATTRIBUTED
+            else CoverageStatus.ASSERTED
+        )
+        recovered.append(
+            OutletCoverage(
+                outlet_domain=article.outlet_domain,
+                article_id=article.id,
+                status=status,
+                source_quote=best_claim.source_quote,
+                attributed_to=best_claim.attributed_to,
+                provenance=best_claim.provenance,
+                position=best_claim.position,
+            )
+        )
+    return recovered
 
 
 def _fallback_alignment(

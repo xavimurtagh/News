@@ -130,15 +130,27 @@ class _LLM:
 
 
 def test_align_drops_hallucinated_outlet_domains(tmp_path: Path, capsys):
-    """LLM-invented outlet_domain values that don't match any article are dropped."""
+    """LLM-invented outlet_domain values that don't match any article are dropped.
+
+    The matching extracted claim is then re-attached by similarity
+    recovery — that's the intended behavior. We assert on the warning
+    and on the absence of the hallucinated domain in the output, plus
+    that an unrelated article still gets OMITTED.
+    """
     from news_lens.models import (
         AlignmentResult,
         CanonicalClaim as _CC,
         OutletCoverage as _OC,
     )
 
-    articles = [_article("a1", "real-outlet.com")]
-    extractions = {"a1": ExtractionResult(claims=[_claim("X happened.")])}
+    articles = [
+        _article("a1", "real-outlet.com"),
+        _article("a2", "second.example"),
+    ]
+    extractions = {
+        "a1": ExtractionResult(claims=[_claim("X happened.")]),
+        "a2": ExtractionResult(claims=[_claim("Totally unrelated topic.")]),
+    }
 
     fake = AlignmentResult(canonical_claims=[
         _CC(
@@ -158,9 +170,9 @@ def test_align_drops_hallucinated_outlet_domains(tmp_path: Path, capsys):
     assert "hallucinated outlet_domain" in err
 
     cc = result.canonical_claims[0]
-    # The hallucinated coverage is gone; replaced by an omitted entry for the real article.
-    assert {oc.outlet_domain for oc in cc.outlets} == {"real-outlet.com"}
-    assert all(oc.status == CoverageStatus.OMITTED for oc in cc.outlets)
+    assert all(oc.outlet_domain != "example.com" for oc in cc.outlets)
+    by_id = {oc.article_id: oc for oc in cc.outlets}
+    assert by_id["a2"].status == CoverageStatus.OMITTED
 
 
 def test_align_drops_hallucinated_article_ids(tmp_path: Path, capsys):
@@ -171,8 +183,14 @@ def test_align_drops_hallucinated_article_ids(tmp_path: Path, capsys):
         OutletCoverage as _OC,
     )
 
-    articles = [_article("a1", "real-outlet.com")]
-    extractions = {"a1": ExtractionResult(claims=[_claim("X happened.")])}
+    articles = [
+        _article("a1", "real-outlet.com"),
+        _article("a2", "second.example"),
+    ]
+    extractions = {
+        "a1": ExtractionResult(claims=[_claim("X happened.")]),
+        "a2": ExtractionResult(claims=[_claim("Totally unrelated topic.")]),
+    }
 
     fake = AlignmentResult(canonical_claims=[
         _CC(
@@ -190,7 +208,8 @@ def test_align_drops_hallucinated_article_ids(tmp_path: Path, capsys):
 
     err = capsys.readouterr().err
     assert "hallucinated article_id" in err
-    assert all(oc.status == CoverageStatus.OMITTED for oc in result.canonical_claims[0].outlets)
+    cc = result.canonical_claims[0]
+    assert all(oc.article_id != "ghost-id" for oc in cc.outlets)
 
 
 def test_align_repairs_mismatched_domain_for_real_article(tmp_path: Path):
@@ -227,3 +246,77 @@ def test_align_repairs_mismatched_domain_for_real_article(tmp_path: Path):
     by_id = {oc.article_id: oc for oc in result.canonical_claims[0].outlets}
     assert by_id["a1"].outlet_domain == "left.example"
     assert by_id["a1"].status == CoverageStatus.ASSERTED
+
+
+def test_align_recovers_outlets_when_llm_returns_empty(tmp_path: Path, capsys):
+    """If LLM returns canonical_text with outlets=[], fuzzy-match recovers them."""
+    from news_lens.models import (
+        AlignmentResult,
+        CanonicalClaim as _CC,
+    )
+
+    articles = [
+        _article("a1", "left.example"),
+        _article("a2", "right.example"),
+    ]
+    extractions = {
+        "a1": ExtractionResult(claims=[
+            _claim("The minister announced new policy today.",
+                   provenance=Provenance.NAMED),
+        ]),
+        "a2": ExtractionResult(claims=[
+            _claim("Today the minister announced a new policy.",
+                   ClaimType.ATTRIBUTED, provenance=Provenance.NAMED),
+        ]),
+    }
+
+    fake = AlignmentResult(canonical_claims=[
+        _CC(
+            canonical_text="The minister announced new policy today.",
+            outlets=[],
+        )
+    ])
+
+    result = asyncio.run(
+        align_claims(articles, extractions, _LLM(fake), Cache(tmp_path))
+    )
+
+    err = capsys.readouterr().err
+    assert "recovered" in err
+
+    cc = result.canonical_claims[0]
+    by_id = {oc.article_id: oc for oc in cc.outlets}
+    # a1's claim is a near-identical match -> ASSERTED with quote preserved.
+    assert by_id["a1"].status == CoverageStatus.ASSERTED
+    assert by_id["a1"].source_quote == "The minister announced new policy today."
+    # a2's matching claim is ATTRIBUTED, so the recovered status reflects that.
+    assert by_id["a2"].status == CoverageStatus.ATTRIBUTED
+
+
+def test_align_recovery_skips_articles_with_no_similar_claim(tmp_path: Path):
+    """Articles whose claims don't match the canonical_text stay OMITTED."""
+    from news_lens.models import (
+        AlignmentResult,
+        CanonicalClaim as _CC,
+    )
+
+    articles = [
+        _article("a1", "left.example"),
+        _article("a2", "right.example"),
+    ]
+    extractions = {
+        "a1": ExtractionResult(claims=[_claim("The minister announced new policy.")]),
+        # a2's only claim is about something totally different.
+        "a2": ExtractionResult(claims=[_claim("Sports league signs broadcast deal.")]),
+    }
+
+    fake = AlignmentResult(canonical_claims=[
+        _CC(canonical_text="The minister announced new policy.", outlets=[])
+    ])
+
+    result = asyncio.run(
+        align_claims(articles, extractions, _LLM(fake), Cache(tmp_path))
+    )
+    by_id = {oc.article_id: oc for oc in result.canonical_claims[0].outlets}
+    assert by_id["a1"].status == CoverageStatus.ASSERTED
+    assert by_id["a2"].status == CoverageStatus.OMITTED
