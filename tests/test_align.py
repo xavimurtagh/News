@@ -111,3 +111,119 @@ def test_align_claims_fallback_handles_empty_extractions(tmp_path: Path):
         align_claims(articles, extractions, _BrokenLLM(), Cache(tmp_path))
     )
     assert result.canonical_claims == []
+
+
+def _alignment_result_class():
+    from news_lens.models import AlignmentResult
+    return AlignmentResult
+
+
+class _LLM:
+    """Mock backend that returns whatever AlignmentResult we hand it."""
+
+    def __init__(self, result):
+        self.result = result
+        self.name = "mock-llm"
+
+    async def parse(self, *, system, user, schema):
+        return self.result
+
+
+def test_align_drops_hallucinated_outlet_domains(tmp_path: Path, capsys):
+    """LLM-invented outlet_domain values that don't match any article are dropped."""
+    from news_lens.models import (
+        AlignmentResult,
+        CanonicalClaim as _CC,
+        OutletCoverage as _OC,
+    )
+
+    articles = [_article("a1", "real-outlet.com")]
+    extractions = {"a1": ExtractionResult(claims=[_claim("X happened.")])}
+
+    fake = AlignmentResult(canonical_claims=[
+        _CC(
+            canonical_text="X happened.",
+            outlets=[
+                _OC(outlet_domain="example.com", article_id="a1",
+                    status=CoverageStatus.ASSERTED),
+            ],
+        )
+    ])
+
+    result = asyncio.run(
+        align_claims(articles, extractions, _LLM(fake), Cache(tmp_path))
+    )
+
+    err = capsys.readouterr().err
+    assert "hallucinated outlet_domain" in err
+
+    cc = result.canonical_claims[0]
+    # The hallucinated coverage is gone; replaced by an omitted entry for the real article.
+    assert {oc.outlet_domain for oc in cc.outlets} == {"real-outlet.com"}
+    assert all(oc.status == CoverageStatus.OMITTED for oc in cc.outlets)
+
+
+def test_align_drops_hallucinated_article_ids(tmp_path: Path, capsys):
+    """LLM-invented article_id values are dropped, with a warning."""
+    from news_lens.models import (
+        AlignmentResult,
+        CanonicalClaim as _CC,
+        OutletCoverage as _OC,
+    )
+
+    articles = [_article("a1", "real-outlet.com")]
+    extractions = {"a1": ExtractionResult(claims=[_claim("X happened.")])}
+
+    fake = AlignmentResult(canonical_claims=[
+        _CC(
+            canonical_text="X happened.",
+            outlets=[
+                _OC(outlet_domain="real-outlet.com", article_id="ghost-id",
+                    status=CoverageStatus.ASSERTED),
+            ],
+        )
+    ])
+
+    result = asyncio.run(
+        align_claims(articles, extractions, _LLM(fake), Cache(tmp_path))
+    )
+
+    err = capsys.readouterr().err
+    assert "hallucinated article_id" in err
+    assert all(oc.status == CoverageStatus.OMITTED for oc in result.canonical_claims[0].outlets)
+
+
+def test_align_repairs_mismatched_domain_for_real_article(tmp_path: Path):
+    """If the LLM names the wrong domain for a real article_id, trust the id."""
+    from news_lens.models import (
+        AlignmentResult,
+        CanonicalClaim as _CC,
+        OutletCoverage as _OC,
+    )
+
+    articles = [
+        _article("a1", "left.example"),
+        _article("a2", "right.example"),
+    ]
+    extractions = {
+        "a1": ExtractionResult(claims=[_claim("X.")]),
+        "a2": ExtractionResult(claims=[_claim("X.")]),
+    }
+
+    # LLM names a1 but with a2's domain — repair by trusting article_id.
+    fake = AlignmentResult(canonical_claims=[
+        _CC(
+            canonical_text="X.",
+            outlets=[
+                _OC(outlet_domain="right.example", article_id="a1",
+                    status=CoverageStatus.ASSERTED),
+            ],
+        )
+    ])
+
+    result = asyncio.run(
+        align_claims(articles, extractions, _LLM(fake), Cache(tmp_path))
+    )
+    by_id = {oc.article_id: oc for oc in result.canonical_claims[0].outlets}
+    assert by_id["a1"].outlet_domain == "left.example"
+    assert by_id["a1"].status == CoverageStatus.ASSERTED

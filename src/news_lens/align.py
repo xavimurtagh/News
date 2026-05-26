@@ -130,11 +130,42 @@ async def align_claims(
 
     article_ids = [a.id for a in articles]
     article_to_outlet = {a.id: a.outlet_domain for a in articles}
+    valid_article_ids = set(article_ids)
+    valid_domains = set(article_to_outlet.values())
 
     filled: list[CanonicalClaim] = []
     for cc in parsed.canonical_claims:
-        present = {oc.article_id for oc in cc.outlets}
-        outlets = list(cc.outlets)
+        # Drop any outlet coverage the LLM invented — wrong article_id,
+        # hallucinated domain, or mismatched article/domain pair. Weak
+        # models routinely emit `outlet_domain="example.com"` or repeat
+        # an article_id from a different sample. We never silently render
+        # an attribution that doesn't trace to a real input article.
+        clean_outlets: list[OutletCoverage] = []
+        for oc in cc.outlets:
+            if oc.article_id not in valid_article_ids:
+                print(
+                    f"WARN: dropping hallucinated article_id {oc.article_id!r} "
+                    f"from canonical claim {cc.canonical_text[:60]!r}",
+                    file=sys.stderr,
+                )
+                continue
+            expected_domain = article_to_outlet[oc.article_id]
+            if oc.outlet_domain != expected_domain:
+                if oc.outlet_domain not in valid_domains:
+                    print(
+                        f"WARN: dropping hallucinated outlet_domain "
+                        f"{oc.outlet_domain!r} from canonical claim "
+                        f"{cc.canonical_text[:60]!r}",
+                        file=sys.stderr,
+                    )
+                    continue
+                # The domain is one of ours but doesn't match this
+                # article_id — repair by trusting the article_id.
+                oc = oc.model_copy(update={"outlet_domain": expected_domain})
+            clean_outlets.append(oc)
+
+        present = {oc.article_id for oc in clean_outlets}
+        outlets = list(clean_outlets)
         for aid in article_ids:
             if aid not in present:
                 outlets.append(

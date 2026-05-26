@@ -1241,6 +1241,13 @@ def _render_summary(matrix: CoverageMatrix) -> str:
     if not matrix.claims:
         return ""
 
+    # Defense in depth: never render an outlet attribution that doesn't
+    # match an article in the matrix. align.py drops hallucinated
+    # outlet_domain values up front, but a cached pre-fix alignment or a
+    # future regression could still produce one — the render must not
+    # silently surface phrases like "— example.com" as a source.
+    valid_domains = {a.outlet_domain for a in matrix.articles}
+
     by_tier: dict[ConsensusTier, list[TieredClaim]] = defaultdict(list)
     for c in matrix.claims:
         by_tier[c.tier].append(c)
@@ -1256,13 +1263,16 @@ def _render_summary(matrix: CoverageMatrix) -> str:
             if tier == ConsensusTier.SINGLE_SOURCED:
                 # Identify the one outlet that has this claim
                 for cov in c.outlets:
-                    if cov.status != CoverageStatus.OMITTED:
-                        attr_html = (
-                            f' <span class="source-attr">— '
-                            f"{_esc(_outlet_display_name(cov.outlet_domain))}"
-                            f"</span>"
-                        )
-                        break
+                    if cov.status == CoverageStatus.OMITTED:
+                        continue
+                    if cov.outlet_domain not in valid_domains:
+                        continue
+                    attr_html = (
+                        f' <span class="source-attr">— '
+                        f"{_esc(_outlet_display_name(cov.outlet_domain))}"
+                        f"</span>"
+                    )
+                    break
             elif tier == ConsensusTier.ATTRIBUTED_ONLY:
                 # List the named sources behind the claim
                 attributors: list[str] = []

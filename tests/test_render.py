@@ -261,3 +261,32 @@ def test_sample_banner_flags_untagged_outlets():
 def test_sample_banner_appears_in_full_render():
     html_doc = render_html(_banner_matrix(["nytimes.com", "foxnews.com"]))
     assert "About this sample" in html_doc
+
+
+def test_summary_skips_unknown_outlet_domains():
+    """A coverage entry with an outlet_domain not in the article set is dropped."""
+    from news_lens.render import _render_summary
+
+    now = datetime(2026, 5, 15, tzinfo=timezone.utc)
+    article = Article(
+        id="a1", url="https://real-outlet.com/x", outlet_domain="real-outlet.com",
+        title="t", fetched_at=now, body="b", paragraph_count=2,
+    )
+    # A single-sourced canonical claim, but the asserting outlet domain
+    # doesn't match the one real article — render must NOT show it.
+    claim = TieredClaim(
+        canonical_text="Some single-sourced fact.",
+        tier=ConsensusTier.SINGLE_SOURCED,
+        outlets=[
+            OutletCoverage(
+                outlet_domain="example.com", article_id="a1",
+                status=CoverageStatus.ASSERTED,
+                source_quote="x", position=1,
+            ),
+        ],
+    )
+    matrix = CoverageMatrix(articles=[article], claims=[claim])
+    html = _render_summary(matrix)
+    assert "example.com" not in html
+    # The claim text is still in the summary, just without the bad attribution.
+    assert "Some single-sourced fact." in html
