@@ -12,6 +12,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=7"]
 local-llm = ["instructor>=1.4", "openai>=1.40"]
+embeddings = ["sentence-transformers>=3.0", "numpy>=1.24"]
 
 [project.scripts]
 news-lens = "news_lens.__main__:main"

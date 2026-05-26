@@ -84,12 +84,63 @@ Rules:
 _PROMPT_HASH = hashlib.sha256(_SYSTEM_PROMPT.encode("utf-8")).hexdigest()[:12]
 
 
+async def _align_via_embeddings(
+    articles: list[Article],
+    extractions: Mapping[str, ExtractionResult],
+    cache: Cache,
+) -> AlignmentResult:
+    """Run the embedding alignment with disk caching keyed on inputs + model."""
+    import asyncio
+
+    from . import align_embeddings
+
+    payload_obj = {
+        "articles": [
+            {
+                "article_id": a.id,
+                "outlet_domain": a.outlet_domain,
+                "claims": [c.model_dump(mode="json") for c in extractions[a.id].claims],
+            }
+            for a in articles
+        ]
+    }
+    payload = json.dumps(payload_obj, indent=2, sort_keys=True)
+    payload_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+    backend_name = f"embeddings:{align_embeddings.DEFAULT_MODEL}"
+    cached = cache.get("alignments", payload_hash, "embed-v1", backend_name)
+    if cached is not None:
+        return AlignmentResult.model_validate(cached)
+
+    # SentenceTransformer.encode is sync; offload so we don't block the loop.
+    result = await asyncio.to_thread(
+        align_embeddings.align_claims_embeddings, articles, extractions
+    )
+    cache.set(
+        "alignments",
+        result.model_dump(mode="json"),
+        payload_hash,
+        "embed-v1",
+        backend_name,
+    )
+    return result
+
+
 async def align_claims(
     articles: list[Article],
     extractions: Mapping[str, ExtractionResult],
     llm: StructuredLLM,
     cache: Cache,
 ) -> AlignmentResult:
+    # Prefer the embedding path when sentence-transformers is installed.
+    # It's deterministic, doesn't hallucinate, doesn't return empty
+    # outlets, and matches what the docstring at the top of this module
+    # describes as the production path. The LLM path remains as a
+    # fallback when the optional dependency isn't installed.
+    from . import align_embeddings
+
+    if align_embeddings.is_available():
+        return await _align_via_embeddings(articles, extractions, cache)
+
     payload_obj = {
         "articles": [
             {

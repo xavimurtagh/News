@@ -320,3 +320,86 @@ def test_align_recovery_skips_articles_with_no_similar_claim(tmp_path: Path):
     by_id = {oc.article_id: oc for oc in result.canonical_claims[0].outlets}
     assert by_id["a1"].status == CoverageStatus.ASSERTED
     assert by_id["a2"].status == CoverageStatus.OMITTED
+
+
+def test_align_uses_embeddings_path_when_available(tmp_path: Path):
+    """When sentence-transformers is importable, align_claims routes through the embedding helper."""
+    from news_lens.models import (
+        AlignmentResult,
+        CanonicalClaim as _CC,
+        OutletCoverage as _OC,
+    )
+    from unittest.mock import patch
+
+    articles = [_article("a1", "left.example"), _article("a2", "right.example")]
+    extractions = {
+        "a1": ExtractionResult(claims=[_claim("Something happened.")]),
+        "a2": ExtractionResult(claims=[_claim("Something happened.", ClaimType.ATTRIBUTED)]),
+    }
+
+    expected = AlignmentResult(canonical_claims=[
+        _CC(
+            canonical_text="Something happened.",
+            outlets=[
+                _OC(outlet_domain="left.example", article_id="a1",
+                    status=CoverageStatus.ASSERTED),
+                _OC(outlet_domain="right.example", article_id="a2",
+                    status=CoverageStatus.ATTRIBUTED),
+            ],
+        )
+    ])
+
+    class _BoomLLM:
+        """LLM path must NOT be reached."""
+        name = "should-not-be-called"
+
+        async def parse(self, *, system, user, schema):
+            raise AssertionError("LLM path called despite embeddings available")
+
+    with patch("news_lens.align_embeddings.is_available", return_value=True), \
+         patch(
+             "news_lens.align_embeddings.align_claims_embeddings",
+             return_value=expected,
+         ):
+        result = asyncio.run(
+            align_claims(articles, extractions, _BoomLLM(), Cache(tmp_path))
+        )
+
+    assert result.canonical_claims[0].canonical_text == "Something happened."
+    by_id = {oc.article_id: oc for oc in result.canonical_claims[0].outlets}
+    assert by_id["a1"].status == CoverageStatus.ASSERTED
+    assert by_id["a2"].status == CoverageStatus.ATTRIBUTED
+
+
+def test_align_embeddings_result_is_cached(tmp_path: Path):
+    """A repeated align_claims call hits the embeddings cache, not the model."""
+    from news_lens.models import (
+        AlignmentResult,
+        CanonicalClaim as _CC,
+        OutletCoverage as _OC,
+    )
+    from unittest.mock import patch
+
+    articles = [_article("a1", "x.example")]
+    extractions = {"a1": ExtractionResult(claims=[_claim("Hello.")])}
+
+    expected = AlignmentResult(canonical_claims=[
+        _CC(canonical_text="Hello.", outlets=[
+            _OC(outlet_domain="x.example", article_id="a1",
+                status=CoverageStatus.ASSERTED),
+        ])
+    ])
+
+    call_count = {"n": 0}
+
+    def fake_align(arts, exts, **kwargs):
+        call_count["n"] += 1
+        return expected
+
+    cache = Cache(tmp_path)
+    with patch("news_lens.align_embeddings.is_available", return_value=True), \
+         patch("news_lens.align_embeddings.align_claims_embeddings", fake_align):
+        asyncio.run(align_claims(articles, extractions, _BrokenLLM(), cache))
+        asyncio.run(align_claims(articles, extractions, _BrokenLLM(), cache))
+
+    assert call_count["n"] == 1
