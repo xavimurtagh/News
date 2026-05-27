@@ -15,6 +15,11 @@ Tier-balanced search (round-robin across mainstream/public/independent/advocacy/
 Combine search + explicit URLs:
     python -m news_lens https://example.com/article --search "topic" --max-sources 3 --ollama
 
+Historical case study (curated URLs from archive.org or live web):
+    python -m news_lens --urls-file examples/vietnam_gulf_of_tonkin.urls --ollama --html gulf.html
+GDELT's archive starts February 2015; older events need the --urls-file
+path. See examples/README.md for the workflow.
+
 Claude (default; requires ANTHROPIC_API_KEY):
     python -m news_lens URL1 URL2 URL3 --html out.html
 

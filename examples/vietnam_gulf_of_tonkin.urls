@@ -1,0 +1,75 @@
+# Vietnam — Gulf of Tonkin coverage, August 2–7 1964
+#
+# This is the canonical Manufacturing-Consent case study. President Johnson
+# announced that North Vietnamese boats had attacked U.S. destroyers in
+# international waters on the night of August 4, 1964; that attack never
+# happened. The U.S. mainstream press largely repeated the administration's
+# version as fact and Congress passed the Tonkin Gulf Resolution three days
+# later, the legal basis for the next decade of U.S. military escalation.
+#
+# To run this comparison, replace each placeholder line below with a real
+# URL — usually an Internet Archive Wayback Machine snapshot. The
+# `--urls-file` workflow expects one URL per line; lines starting with `#`
+# are skipped.
+#
+# Usage (once URLs are filled in):
+#   python -m news_lens \
+#       --urls-file examples/vietnam_gulf_of_tonkin.urls \
+#       --ollama --model qwen3:8b --max-concurrency 1 \
+#       --html gulf_of_tonkin.html
+#
+# Articles to source:
+#
+# U.S. wire / mainstream:
+#   - The New York Times: "U.S. PLANES ATTACK NORTH VIETNAM BASES; PRESIDENT
+#     ORDERS 'LIMITED' RETALIATION AFTER COMMUNISTS' PT BOATS RENEW RAIDS"
+#     (front page, August 5 1964)
+#   - The Washington Post: lead Aug 5 1964 coverage
+#   - The AP wire story carried by regional papers Aug 5 1964
+#   - Time magazine: cover story August 14 1964
+#
+# U.S. critical / independent:
+#   - I.F. Stone's Weekly, August 24 1964 ("What few know about the Tonkin
+#     Bay incidents") — early and lonely contradiction of the official line.
+#
+# Allied / Western European mainstream:
+#   - The Times of London, Aug 5 1964
+#   - Le Monde (Paris), Aug 5–7 1964
+#
+# Soviet / Eastern bloc:
+#   - Pravda, Aug 6 1964 (English translation if available)
+#
+# North Vietnamese:
+#   - Nhân Dân (party paper), Aug 1964 statements
+#   - Or the Vietnam News Agency dispatches reprinted in Beijing Review
+#
+# Later-declassified record (NOT for the matrix — for the reader's own
+# comparison against the wartime framing):
+#   - The 2005 NSA declassification of internal communications confirming
+#     the second attack of Aug 4 did not occur (NSA Historical Document
+#     Release; available on the National Security Archive site).
+#
+# Replace each "https://web.archive.org/web/.../..." line with the actual
+# Wayback Machine URL once you have located each article. If the Wayback
+# Machine has multiple snapshots, prefer one timestamped within a year of
+# the article's original publication (older snapshots tend to render less
+# of the original layout).
+#
+# --- replace below this line with one URL per article ---
+
+# NYT Aug 5 1964 front page:
+# https://web.archive.org/web/.../nytimes.com/...
+# Washington Post Aug 5 1964:
+# https://web.archive.org/web/.../washingtonpost.com/...
+# AP wire copy (e.g. via a regional paper that ran it):
+# https://web.archive.org/web/.../...
+# I.F. Stone's Weekly Aug 24 1964:
+# https://web.archive.org/web/.../ifstone.org/...
+# The Times of London Aug 5 1964:
+# https://web.archive.org/web/.../thetimes.co.uk/...
+# Le Monde Aug 5-7 1964:
+# https://web.archive.org/web/.../lemonde.fr/...
+# Pravda Aug 6 1964:
+# https://web.archive.org/web/.../...
+# Nhân Dân Aug 1964:
+# https://web.archive.org/web/.../nhandan.vn/...

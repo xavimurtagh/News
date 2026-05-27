@@ -1,0 +1,54 @@
+# Ukraine — first week of the Russian full-scale invasion, Feb 24–Mar 3 2022
+#
+# A workable post-2015 alternative to the Vietnam case study, since this
+# event is in GDELT's coverage and the surviving articles are still
+# directly fetchable. Useful for testing whether the tool can surface
+# Russian state framing vs Western mainstream vs Russian-independent
+# coverage of the same opening days.
+#
+# Usage:
+#   python -m news_lens \
+#       --urls-file examples/ukraine_feb_2022.urls \
+#       --ollama --model qwen3:8b --max-concurrency 1 \
+#       --html ukraine_feb_2022.html
+#
+# Outlets to source (replace placeholders with verified URLs — Wayback
+# snapshots are often safer than live URLs for fast-moving events):
+#
+# Russian state-affiliated:
+#   - RT, Feb 24 2022 — "Russia launches military operation in Ukraine"
+#   - Sputnik / TASS — official statements published Feb 24
+#
+# Russian independent (later forced offline; Wayback snapshots survive):
+#   - Meduza, Feb 24-25 2022 — front-page reporting
+#   - Novaya Gazeta, Feb 24 2022 — front-page reporting
+#
+# Western mainstream:
+#   - The New York Times, Feb 24 2022 — lead story
+#   - The Guardian, Feb 24 2022 — live blog wrap or main report
+#   - BBC News, Feb 24 2022 — main report
+#
+# Other perspectives:
+#   - Al Jazeera English, Feb 24 2022
+#   - Xinhua / Global Times, Feb 24 2022 — Chinese state framing
+#   - Le Monde, Feb 24 2022
+#
+# What the comparison should surface:
+#   - Universal claims (e.g. that Russian forces entered Ukraine on Feb 24)
+#   - Disputed framings (special military operation vs invasion / war)
+#   - Omissions (which side's casualties are foregrounded vs buried)
+#   - Single-origin claims (Ministry of Defence press conferences taken as
+#     fact by some outlets, attributed by others)
+#
+# --- replace below this line with one URL per article ---
+
+# https://web.archive.org/web/2022.../rt.com/...
+# https://web.archive.org/web/2022.../tass.com/...
+# https://web.archive.org/web/2022.../meduza.io/...
+# https://web.archive.org/web/2022.../novayagazeta.eu/...
+# https://www.nytimes.com/2022/02/24/...
+# https://www.theguardian.com/world/2022/feb/24/...
+# https://www.bbc.com/news/world-europe-...
+# https://www.aljazeera.com/news/2022/2/24/...
+# https://www.globaltimes.cn/page/202202/...
+# https://www.lemonde.fr/international/article/2022/02/24/...
