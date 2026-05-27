@@ -1569,9 +1569,22 @@ def _render_sample_banner(matrix: CoverageMatrix) -> str:
     stats_html = " · ".join(stat_bits)
 
     notes: list[str] = []
+    # The whole tool is a cross-outlet comparison; with only one outlet
+    # there is nothing to compare. Say so loudly — otherwise the
+    # "Universal" tier reads as consensus when it's really just one
+    # voice asserted as fact.
+    if n == 1:
+        notes.append(
+            "Only one outlet is in this sample. Cross-outlet tiers and the "
+            "coverage matrix can't say anything about consensus or omission "
+            "with a single voice — what follows is effectively a per-article "
+            "framing analysis. Re-run with more sources to compare across "
+            "outlets."
+        )
+
     left_present = bool(lean_counts["left"] or lean_counts["center-left"])
     right_present = bool(lean_counts["center-right"] or lean_counts["right"])
-    if known:
+    if known and n > 1:
         if not left_present and not right_present:
             notes.append(
                 "Every rated outlet sits at the centre — neither the left "
@@ -1589,7 +1602,7 @@ def _render_sample_banner(matrix: CoverageMatrix) -> str:
             )
 
     non_mainstream = sum(c for t, c in tier_counts.items() if t != "mainstream")
-    if known and non_mainstream == 0:
+    if known and non_mainstream == 0 and n > 1:
         notes.append(
             "Every classified outlet is commercial-mainstream — no "
             "independent, public-broadcast, advocacy, or state outlet is "

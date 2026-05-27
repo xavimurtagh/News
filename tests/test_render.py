@@ -290,3 +290,14 @@ def test_summary_skips_unknown_outlet_domains():
     assert "example.com" not in html
     # The claim text is still in the summary, just without the bad attribution.
     assert "Some single-sourced fact." in html
+
+
+def test_sample_banner_flags_single_outlet_runs():
+    """A 1-outlet sample must say loudly that no comparison is possible."""
+    from news_lens.render import _render_sample_banner
+
+    banner = _render_sample_banner(_banner_matrix(["nytimes.com"]))
+    assert "Only one outlet" in banner
+    # Spectrum-gap notes should NOT fire alongside the single-outlet note.
+    assert "leans left" not in banner
+    assert "commercial-mainstream" not in banner

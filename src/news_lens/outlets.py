@@ -158,6 +158,7 @@ _REGISTRY: dict[str, OutletInfo] = {
     "thedailybeast.com": OutletInfo("The Daily Beast", "US", "digital", "left"),
     "slate.com": OutletInfo("Slate", "US", "digital", "left"),
     "salon.com": OutletInfo("Salon", "US", "digital", "left"),
+    "forward.com": OutletInfo("The Forward", "US", "magazine", "center-left"),
     "propublica.org": OutletInfo("ProPublica", "US", "digital", "center-left", tier="independent"),
     "theintercept.com": OutletInfo("The Intercept", "US", "digital", "left", tier="independent"),
     "commondreams.org": OutletInfo("Common Dreams", "US", "digital", "left", tier="independent"),
@@ -173,6 +174,7 @@ _REGISTRY: dict[str, OutletInfo] = {
     # ── US — financial ───────────────────────────────────────────────
     "bloomberg.com": OutletInfo("Bloomberg", "US", "newspaper", "center"),
     # ── UK ───────────────────────────────────────────────────────────
+    "huffingtonpost.co.uk": OutletInfo("HuffPost UK", "UK", "digital", "left"),
     "reuters.com": OutletInfo("Reuters", "UK", "wire", "center"),
     "bbc.com": OutletInfo("BBC News", "UK", "broadcaster", "center", tier="public"),
     "bbc.co.uk": OutletInfo("BBC News", "UK", "broadcaster", "center", tier="public"),
@@ -202,37 +204,108 @@ _REGISTRY: dict[str, OutletInfo] = {
     # ── Europe ───────────────────────────────────────────────────────
     "afp.com": OutletInfo("Agence France-Presse", "FR", "wire", "center"),
     "lemonde.fr": OutletInfo("Le Monde", "FR", "newspaper", "center-left"),
+    "lefigaro.fr": OutletInfo("Le Figaro", "FR", "newspaper", "center-right"),
+    "liberation.fr": OutletInfo("Libération", "FR", "newspaper", "left"),
+    "monde-diplomatique.fr": OutletInfo("Le Monde diplomatique", "FR", "magazine", "left", tier="independent"),
     "france24.com": OutletInfo("France 24", "FR", "broadcaster", "center", tier="public"),
     "spiegel.de": OutletInfo("Der Spiegel", "DE", "magazine", "center-left"),
+    "sueddeutsche.de": OutletInfo("Süddeutsche Zeitung", "DE", "newspaper", "center-left"),
+    "faz.net": OutletInfo("Frankfurter Allgemeine", "DE", "newspaper", "center-right"),
     "dw.com": OutletInfo("Deutsche Welle", "DE", "broadcaster", "center", tier="public"),
     "elpais.com": OutletInfo("El País", "ES", "newspaper", "center-left"),
+    "elmundo.es": OutletInfo("El Mundo", "ES", "newspaper", "center-right"),
+    "corriere.it": OutletInfo("Corriere della Sera", "IT", "newspaper", "center"),
+    "repubblica.it": OutletInfo("La Repubblica", "IT", "newspaper", "center-left"),
+    "nrc.nl": OutletInfo("NRC", "NL", "newspaper", "center"),
+    "volkskrant.nl": OutletInfo("de Volkskrant", "NL", "newspaper", "center-left"),
     "euronews.com": OutletInfo("Euronews", "EU", "broadcaster", "center"),
+    "politico.eu": OutletInfo("Politico Europe", "EU", "digital", "center"),
     "irishtimes.com": OutletInfo("The Irish Times", "IE", "newspaper", "center-left"),
     "rte.ie": OutletInfo("RTÉ", "IE", "broadcaster", "center", tier="public"),
+    # Nordic
+    "aftenposten.no": OutletInfo("Aftenposten", "NO", "newspaper", "center-right"),
+    "nrk.no": OutletInfo("NRK", "NO", "broadcaster", "center", tier="public"),
+    "dn.se": OutletInfo("Dagens Nyheter", "SE", "newspaper", "center"),
+    "svt.se": OutletInfo("SVT", "SE", "broadcaster", "center", tier="public"),
+    "hs.fi": OutletInfo("Helsingin Sanomat", "FI", "newspaper", "center"),
+    "yle.fi": OutletInfo("Yle", "FI", "broadcaster", "center", tier="public"),
+    "politiken.dk": OutletInfo("Politiken", "DK", "newspaper", "center-left"),
+    # Central / Eastern Europe
+    "rtvslo.si": OutletInfo("RTV Slovenija", "SI", "broadcaster", "center", tier="public"),
+    "lrytas.lt": OutletInfo("Lrytas", "LT", "digital", "center"),
+    "delfi.lt": OutletInfo("Delfi", "LT", "digital", "center"),
+    "wyborcza.pl": OutletInfo("Gazeta Wyborcza", "PL", "newspaper", "center-left"),
+    "novayagazeta.eu": OutletInfo("Novaya Gazeta Europe", "RU", "digital", "left", tier="independent"),
+    "meduza.io": OutletInfo("Meduza", "RU", "digital", "center-left", tier="independent"),
     "theconversation.com": OutletInfo("The Conversation", "AU", "digital", "center", tier="independent"),
     # ── Americas / Oceania ───────────────────────────────────────────
     "globeandmail.com": OutletInfo("The Globe and Mail", "CA", "newspaper", "center"),
     "cbc.ca": OutletInfo("CBC News", "CA", "broadcaster", "center-left", tier="public"),
+    "thestar.com": OutletInfo("Toronto Star", "CA", "newspaper", "center-left"),
+    "winnipegfreepress.com": OutletInfo("Winnipeg Free Press", "CA", "newspaper", "center"),
     "abc.net.au": OutletInfo("ABC News (Australia)", "AU", "broadcaster", "center-left", tier="public"),
     "smh.com.au": OutletInfo("Sydney Morning Herald", "AU", "newspaper", "center-left"),
+    "theaustralian.com.au": OutletInfo("The Australian", "AU", "newspaper", "right"),
+    "skynews.com.au": OutletInfo("Sky News Australia", "AU", "broadcaster", "right"),
+    "stuff.co.nz": OutletInfo("Stuff", "NZ", "digital", "center"),
+    "rnz.co.nz": OutletInfo("RNZ", "NZ", "broadcaster", "center", tier="public"),
+    "clarin.com": OutletInfo("Clarín", "AR", "newspaper", "center"),
+    "folha.uol.com.br": OutletInfo("Folha de S.Paulo", "BR", "newspaper", "center"),
+    "eluniversal.com.mx": OutletInfo("El Universal", "MX", "newspaper", "center"),
     # ── Middle East ──────────────────────────────────────────────────
     "haaretz.com": OutletInfo("Haaretz", "IL", "newspaper", "center-left"),
     "timesofisrael.com": OutletInfo("The Times of Israel", "IL", "digital", "center"),
     "jpost.com": OutletInfo("The Jerusalem Post", "IL", "newspaper", "center-right"),
+    "ynetnews.com": OutletInfo("Ynetnews", "IL", "digital", "center-right"),
+    "arabnews.com": OutletInfo("Arab News", "SA", "newspaper", None),
+    "almanar.com.lb": OutletInfo("Al-Manar", "LB", "broadcaster", None, tier="state"),
+    "dailystar.com.lb": OutletInfo("The Daily Star (Lebanon)", "LB", "newspaper", "center"),
+    "aa.com.tr": OutletInfo("Anadolu Agency", "TR", "wire", None, tier="state"),
+    "trtworld.com": OutletInfo("TRT World", "TR", "broadcaster", None, tier="state"),
+    "hurriyetdailynews.com": OutletInfo("Hürriyet Daily News", "TR", "newspaper", "center-right"),
+    "milliyet.com.tr": OutletInfo("Milliyet", "TR", "newspaper", "center"),
+    "aksam.com.tr": OutletInfo("Akşam", "TR", "newspaper", "center-right"),
+    "yeniakit.com.tr": OutletInfo("Yeni Akit", "TR", "newspaper", "right", tier="advocacy"),
+    "haberler.com": OutletInfo("Haberler", "TR", "digital", None),
+    "haber.mynet.com": OutletInfo("Mynet Haber", "TR", "digital", None),
+    "presstv.ir": OutletInfo("Press TV", "IR", "broadcaster", None, tier="state"),
     # ── Asia ─────────────────────────────────────────────────────────
     "japantimes.co.jp": OutletInfo("The Japan Times", "JP", "newspaper", "center"),
+    "asahi.com": OutletInfo("Asahi Shimbun", "JP", "newspaper", "center-left"),
     "thehindu.com": OutletInfo("The Hindu", "IN", "newspaper", "center-left"),
     "timesofindia.indiatimes.com": OutletInfo("The Times of India", "IN", "newspaper", "center"),
+    "indianexpress.com": OutletInfo("The Indian Express", "IN", "newspaper", "center"),
     "ndtv.com": OutletInfo("NDTV", "IN", "broadcaster", None),
+    "thewire.in": OutletInfo("The Wire", "IN", "digital", "left", tier="independent"),
     "straitstimes.com": OutletInfo("The Straits Times", "SG", "newspaper", "center"),
+    "channelnewsasia.com": OutletInfo("CNA", "SG", "broadcaster", "center", tier="public"),
+    "thestar.com.my": OutletInfo("The Star (Malaysia)", "MY", "newspaper", "center"),
+    "vnexpress.net": OutletInfo("VnExpress", "VN", "digital", None, tier="state"),
+    "vietnamnews.vn": OutletInfo("Viet Nam News", "VN", "newspaper", None, tier="state"),
+    "nhandan.vn": OutletInfo("Nhân Dân", "VN", "newspaper", None, tier="state"),
+    # ── Africa ───────────────────────────────────────────────────────
+    "mg.co.za": OutletInfo("Mail & Guardian", "ZA", "newspaper", "center-left"),
+    "dailymaverick.co.za": OutletInfo("Daily Maverick", "ZA", "digital", "center-left", tier="independent"),
+    "newvision.co.ug": OutletInfo("New Vision", "UG", "newspaper", None),
     # ── State-funded / state-controlled ──────────────────────────────
     # Lean is left None: the relevant axis for these is the institutional
     # tier, not left/right framing.
     "aljazeera.com": OutletInfo("Al Jazeera", "QA", "broadcaster", None, tier="state"),
     "scmp.com": OutletInfo("South China Morning Post", "HK", "newspaper", None),
     "rt.com": OutletInfo("RT", "RU", "broadcaster", None, tier="state"),
+    "sputniknews.com": OutletInfo("Sputnik", "RU", "digital", None, tier="state"),
+    "tass.com": OutletInfo("TASS", "RU", "wire", None, tier="state"),
     "globaltimes.cn": OutletInfo("Global Times", "CN", "newspaper", None, tier="state"),
     "xinhuanet.com": OutletInfo("Xinhua", "CN", "wire", None, tier="state"),
+    "cgtn.com": OutletInfo("CGTN", "CN", "broadcaster", None, tier="state"),
+    "chinadaily.com.cn": OutletInfo("China Daily", "CN", "newspaper", None, tier="state"),
+    # ── archive.org wrapper ──────────────────────────────────────────
+    # Articles fetched through the Wayback Machine carry the
+    # web.archive.org host. We can't usefully classify the wrapper
+    # itself; selectors should treat it as unknown so the underlying
+    # outlet (visible in the URL path) is what the reader sees.
+    # If you want richer historical analysis, normalise the upstream
+    # domain in ingest before this lookup ever sees web.archive.org.
 }
 
 
