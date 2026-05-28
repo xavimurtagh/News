@@ -389,3 +389,29 @@ def test_voices_section_omitted_when_no_lenses():
     matrix = _multi_outlet_matrix(["nytimes.com", "wsj.com"])
     html_doc = render_html(matrix)
     assert "Voices in the story" not in html_doc
+
+
+def test_table_of_contents_links_to_sections():
+    """The TOC links to whatever sections are present in the report."""
+    matrix = _lensed_matrix()
+    html_doc = render_html(matrix)
+    assert 'class="toc"' in html_doc
+    assert 'href="#articles"' in html_doc
+    assert 'href="#ownership"' in html_doc
+    assert 'href="#profile"' in html_doc
+    # No claims in this matrix -> no jumps for summary / matrix.
+    assert 'href="#summary"' not in html_doc
+    # Lenses present -> voices and framing are linked.
+    assert 'href="#voices"' in html_doc
+    assert 'href="#framing"' in html_doc
+
+
+def test_table_of_contents_omits_links_for_absent_sections():
+    """When there are no lenses, the TOC drops voices and framing entries."""
+    html_doc = render_html(_multi_outlet_matrix(["nytimes.com", "wsj.com"]))
+    assert 'href="#voices"' not in html_doc
+    assert 'href="#framing"' not in html_doc
+    # Articles + ownership + profile still present.
+    assert 'href="#articles"' in html_doc
+    assert 'href="#ownership"' in html_doc
+    assert 'href="#profile"' in html_doc

@@ -301,6 +301,38 @@ section h2 {
   margin-top: 8px;
 }
 
+.toc {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin-bottom: 24px;
+  font-size: 12px;
+}
+.toc .toc-label {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.toc .toc-links {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.toc a {
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.toc a:hover { text-decoration: underline; }
+html { scroll-behavior: smooth; }
+:target { scroll-margin-top: 14px; }
+
 .ownership-stats {
   font-size: 13px;
   color: var(--text);
@@ -1768,6 +1800,37 @@ def _render_sample_banner(matrix: CoverageMatrix) -> str:
     )
 
 
+def _render_table_of_contents(matrix: CoverageMatrix) -> str:
+    """Jump list to each section, mirroring the sections render_html builds.
+
+    The report is long once ownership, voices, and per-article framing all
+    fire. The TOC is rendered right after the sample banner so the reader
+    can land on the section they care about without scrolling through
+    every other one.
+    """
+    items: list[tuple[str, str]] = [("articles", "Articles")]
+    if matrix.articles:
+        items.append(("ownership", "Who owns these outlets"))
+    if matrix.claims:
+        items.append(("summary", "Story at a Glance"))
+        items.append(("matrix", "Coverage Matrix"))
+    if matrix.lenses:
+        items.append(("voices", "Voices in the story"))
+        items.append(("framing", "Per-Article Framing"))
+    items.append(("profile", "Outlet Coverage Profile"))
+
+    links = "".join(
+        f'<a href="#{_id}">{_esc(label)}</a>'
+        for _id, label in items
+    )
+    return (
+        '<nav class="toc">'
+        '<span class="toc-label">Jump to</span>'
+        f'<div class="toc-links">{links}</div>'
+        "</nav>"
+    )
+
+
 _OWNERSHIP_INTRO = (
     "Manufacturing Consent calls ownership the propaganda model's first "
     "filter — who owns a paper shapes who its editors answer to and what "
@@ -1858,7 +1921,7 @@ def _render_ownership_section(matrix: CoverageMatrix) -> str:
 
     groups_html = "".join(group_html_parts)
     return (
-        "<section class=\"ownership\">"
+        '<section id="ownership" class="ownership">'
         "<h2>Who owns these outlets</h2>"
         f"<p class=\"section-note\">{_OWNERSHIP_INTRO}</p>"
         f"{stats_html}"
@@ -1953,7 +2016,7 @@ def _render_voices_section(matrix: CoverageMatrix, outlet_order: list[str]) -> s
         )
 
     return (
-        "<section class=\"voices\">"
+        '<section id="voices" class="voices">'
         "<h2>Voices in the story</h2>"
         f"<p class=\"section-note\">{_VOICES_INTRO}</p>"
         f"{stats_html}"
@@ -1974,7 +2037,7 @@ def render_html(matrix: CoverageMatrix) -> str:
     framing_section = ""
     if matrix.lenses:
         framing_section = (
-            "<section>"
+            '<section id="framing">'
             "<h2>Per-Article Framing</h2>"
             f"{_render_lenses(matrix.lenses, outlet_order)}"
             "</section>"
@@ -1999,16 +2062,17 @@ def render_html(matrix: CoverageMatrix) -> str:
         f" · generated {_esc(generated)}</div>"
         "</header>"
         f"{_render_sample_banner(matrix)}"
-        "<section>"
+        f"{_render_table_of_contents(matrix)}"
+        '<section id="articles">'
         "<h2>Articles</h2>"
         f"{_render_articles(matrix.articles, outlet_order, matrix.syndication_groups, matrix.lenses)}"
         "</section>"
         f"{_render_ownership_section(matrix)}"
-        "<section>"
+        '<section id="summary">'
         "<h2>Story at a Glance</h2>"
         f"{_render_summary(matrix)}"
         "</section>"
-        "<section>"
+        '<section id="matrix">'
         "<h2>Coverage Matrix</h2>"
         '<p class="section-note">'
         "Each row is a claim some outlet made. The bold line is a plain "
@@ -2022,7 +2086,7 @@ def render_html(matrix: CoverageMatrix) -> str:
         "</section>"
         f"{voices_section}"
         f"{framing_section}"
-        "<section>"
+        '<section id="profile">'
         "<h2>Outlet Coverage Profile</h2>"
         f"{_render_fingerprints(matrix, outlet_order)}"
         "</section>"
