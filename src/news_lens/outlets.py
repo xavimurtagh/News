@@ -112,6 +112,8 @@ class OutletInfo(NamedTuple):
     tier: str = "mainstream"  # one of INSTITUTIONAL_TIERS
     owner: Optional[str] = None  # short human-readable ownership label
     owner_key: Optional[str] = None  # normalized key for grouping outlets by shared owner
+    funding: Optional[str] = None  # short human-readable funding-structure label
+    listed: Optional[str] = None  # stock-exchange listing if publicly traded, e.g. "NYSE: NYT"
 
 
 _REGISTRY: dict[str, OutletInfo] = {
@@ -495,6 +497,191 @@ for _domain, (_owner, _owner_key) in _OWNERSHIP.items():
     if _domain in _REGISTRY:
         _REGISTRY[_domain] = _REGISTRY[_domain]._replace(
             owner=_owner, owner_key=_owner_key
+        )
+
+
+# Funding-structure data, applied to _REGISTRY at import time.
+#
+# Maintained as a sidecar so the registry table above stays readable
+# and a refresh of funding info is one block of edits.
+#
+# (funding_label, listed_label) per domain.
+#
+# Why funding-structure and not yearly revenue / margin: revenue and
+# profit margins go stale within months and would force a quarterly
+# maintenance burden the rest of the project doesn't carry. The
+# *structure* of revenue (advertiser dependence, subscription mix,
+# licence fee, billionaire subsidy, private-equity debt service,
+# nonprofit donor base) is far more durable AND more relevant to
+# Manufacturing Consent's Filter 2 (advertising) than a single year's
+# margin number.
+#
+# `listed` is the stock-exchange listing when the outlet's parent is a
+# publicly-traded company. It's verifiable from any market data site
+# and rarely changes; useful for readers who want to follow the money.
+_FUNDING: dict[str, tuple[Optional[str], Optional[str]]] = {
+    # ── News Corp / Fox Corp (Murdoch family) ────────────────────────
+    "wsj.com": ("Subscription + advertising", "NASDAQ: NWS / NWSA"),
+    "nypost.com": ("Advertising + tabloid sales", "NASDAQ: NWS / NWSA"),
+    "thetimes.com": ("Subscription + advertising", "NASDAQ: NWS / NWSA"),
+    "thetimes.co.uk": ("Subscription + advertising", "NASDAQ: NWS / NWSA"),
+    "foxnews.com": ("Cable affiliate fees + advertising", "NASDAQ: FOX / FOXA"),
+    "theaustralian.com.au": ("Subscription + advertising", "NASDAQ: NWS"),
+    "skynews.com.au": ("Advertising + carriage fees", "NASDAQ: NWS"),
+    # ── Reach plc ────────────────────────────────────────────────────
+    "mirror.co.uk": ("Advertising + print copy sales", "LSE: RCH"),
+    "express.co.uk": ("Advertising + print copy sales", "LSE: RCH"),
+    # ── DMGT (Rothermere family) ─────────────────────────────────────
+    "dailymail.co.uk": ("Advertising + print copy sales", "Private (DMGT delisted 2022)"),
+    "metro.co.uk": ("Advertising (free distribution)", "Private (DMGT delisted 2022)"),
+    # ── Gannett / Newsquest ──────────────────────────────────────────
+    "usatoday.com": ("Advertising + subscription", "NYSE: GCI"),
+    "heraldscotland.com": ("Advertising + subscription", "NYSE: GCI"),
+    "thenational.scot": ("Advertising + subscription", "NYSE: GCI"),
+    # ── US conglomerates ─────────────────────────────────────────────
+    "cnn.com": ("Cable affiliate fees + advertising + subscription", "NASDAQ: WBD"),
+    "nbcnews.com": ("Cable affiliate fees + advertising", "NASDAQ: CMCSA"),
+    "msnbc.com": ("Cable affiliate fees + advertising", "NASDAQ: CMCSA"),
+    "news.sky.com": ("Subscription + advertising", "NASDAQ: CMCSA"),
+    "abcnews.go.com": ("Advertising + carriage fees", "NYSE: DIS"),
+    "cbsnews.com": ("Advertising + carriage fees", "NASDAQ: PARA"),
+    "newyorker.com": ("Subscription + advertising (Condé Nast)", "Private"),
+    # ── US legacy independents ───────────────────────────────────────
+    "nytimes.com": ("Subscription-led + advertising", "NYSE: NYT"),
+    "bostonglobe.com": ("Subscription + advertising", "Private (John Henry)"),
+    # ── US billionaire-owned ─────────────────────────────────────────
+    "washingtonpost.com": ("Subscription + advertising · owner-subsidised", "Private (Bezos)"),
+    "latimes.com": ("Subscription + advertising · owner-subsidised", "Private (Soon-Shiong)"),
+    "theatlantic.com": ("Subscription + advertising · owner-subsidised", "Private (Powell Jobs)"),
+    "time.com": ("Subscription + advertising · owner-subsidised", "Private (Benioff)"),
+    "bloomberg.com": ("Terminal data fees + media advertising", "Private (Bloomberg LP)"),
+    # ── US partisan / private digital ────────────────────────────────
+    "thedailywire.com": ("Subscription + advertising · advocacy-funded", "Private"),
+    "breitbart.com": ("Advertising · advocacy-funded", "Private"),
+    "newsmax.com": ("Advertising + carriage fees", "Private"),
+    "oann.com": ("Carriage fees + advertising", "Private"),
+    "theblaze.com": ("Subscription + advertising", "Private"),
+    "thefederalist.com": ("Advertising · advocacy-funded", "Private"),
+    "washingtonexaminer.com": ("Advertising + subscription · billionaire-backed", "Private (Anschutz)"),
+    "nationalreview.com": ("Subscription + donations", "501(c)(3)"),
+    # ── US digital majors ────────────────────────────────────────────
+    "politico.com": ("Subscription + advertising", "Private (Axel Springer)"),
+    "businessinsider.com": ("Subscription + advertising", "Private (Axel Springer)"),
+    "huffpost.com": ("Advertising", "NASDAQ: BZFD"),
+    "huffingtonpost.co.uk": ("Advertising", "NASDAQ: BZFD"),
+    "vox.com": ("Advertising + commerce + licensing", "Private (Penske)"),
+    "thedailybeast.com": ("Advertising", "NASDAQ: IAC"),
+    "axios.com": ("Advertising + events + subscription", "Private (Cox)"),
+    "thehill.com": ("Advertising", "NASDAQ: NXST"),
+    "newsweek.com": ("Subscription + advertising", "Private"),
+    "forbes.com": ("Advertising + licensing", "Private"),
+    "slate.com": ("Subscription + advertising + podcasts", "NYSE: GHC"),
+    # ── US nonprofit / reader-funded ─────────────────────────────────
+    "apnews.com": ("Member subscriptions + licensing", "Nonprofit cooperative"),
+    "npr.org": ("Member station fees + sponsorship + appropriation", "Nonprofit"),
+    "pbs.org": ("Member station fees + sponsorship + appropriation", "Nonprofit"),
+    "propublica.org": ("Foundation grants + donations", "Nonprofit"),
+    "theintercept.com": ("Donations + foundation grants", "Nonprofit"),
+    "motherjones.com": ("Subscription + donations + foundation grants", "Nonprofit"),
+    "thenation.com": ("Subscription + donations", "Nonprofit"),
+    "jacobin.com": ("Subscription + donations", "Independent"),
+    "commondreams.org": ("Donations + foundation grants", "Nonprofit"),
+    "truthout.org": ("Donations + foundation grants", "Nonprofit"),
+    "consortiumnews.com": ("Reader donations", "Nonprofit"),
+    "forward.com": ("Donations + foundation grants", "Nonprofit"),
+    "reason.com": ("Donations + subscription", "Nonprofit (Reason Foundation)"),
+    # ── UK ───────────────────────────────────────────────────────────
+    "theguardian.com": ("Reader contributions + advertising (Scott Trust)", "Nonprofit trust"),
+    "ft.com": ("Subscription + advertising", "Private (Nikkei)"),
+    "telegraph.co.uk": ("Subscription + advertising", "Private"),
+    "spectator.co.uk": ("Subscription + advertising", "Private"),
+    "independent.co.uk": ("Advertising + subscription", "Private"),
+    "economist.com": ("Subscription + advertising", "Private (Economist Group)"),
+    "newstatesman.com": ("Subscription + advertising", "Private"),
+    "itv.com": ("Advertising + production licensing", "LSE: ITV"),
+    "gbnews.com": ("Advertising · investor-subsidised", "Private"),
+    "morningstaronline.co.uk": ("Reader cooperative subscriptions", "Cooperative"),
+    "opendemocracy.net": ("Donations + foundation grants", "Nonprofit"),
+    "theweek.com": ("Subscription + advertising", "LSE: FUTR"),
+    "thejc.com": ("Subscription + advertising + donor support", "Private"),
+    "middleeasteye.net": ("Advertising · ownership disputed", "Private"),
+    "bbc.com": ("UK licence fee + commercial arm", "Public charter"),
+    "bbc.co.uk": ("UK licence fee + commercial arm", "Public charter"),
+    # ── France / Germany / Europe ────────────────────────────────────
+    "lemonde.fr": ("Subscription + advertising", "Private"),
+    "lefigaro.fr": ("Subscription + advertising", "Private"),
+    "liberation.fr": ("Subscription + advertising", "Private (Altice/Drahi)"),
+    "monde-diplomatique.fr": ("Subscription + donations", "Nonprofit-style"),
+    "france24.com": ("French state appropriation", "Public"),
+    "afp.com": ("State subsidy + commercial subscription", "Public-mandated"),
+    "spiegel.de": ("Subscription + advertising (employee partnership)", "Private partnership"),
+    "sueddeutsche.de": ("Subscription + advertising", "Private"),
+    "faz.net": ("Subscription + advertising (foundation-owned)", "Foundation"),
+    "dw.com": ("German federal appropriation", "Public"),
+    "elpais.com": ("Subscription + advertising", "BMAD: PRS"),
+    "elmundo.es": ("Subscription + advertising", "Private (RCS)"),
+    "corriere.it": ("Subscription + advertising", "BIT: RCS"),
+    "repubblica.it": ("Subscription + advertising", "BIT: GEDI (delisted)"),
+    "irishtimes.com": ("Subscription + advertising (Irish Times Trust)", "Nonprofit trust"),
+    "rte.ie": ("Irish licence fee + commercial", "Public"),
+    "rtvslo.si": ("Slovenian licence fee + appropriation", "Public"),
+    "nrk.no": ("Norwegian appropriation (post-licence)", "Public"),
+    "svt.se": ("Swedish broadcast tax", "Public"),
+    "yle.fi": ("Finnish broadcast tax", "Public"),
+    "theconversation.com": ("University consortium funding + donations", "Nonprofit"),
+    # ── Americas / Oceania ───────────────────────────────────────────
+    "globeandmail.com": ("Subscription + advertising", "Private (Thomson family)"),
+    "cbc.ca": ("Canadian federal appropriation + advertising", "Public"),
+    "winnipegfreepress.com": ("Subscription + advertising", "FP Newspapers LP"),
+    "abc.net.au": ("Australian federal appropriation", "Public"),
+    "smh.com.au": ("Subscription + advertising", "ASX: NEC"),
+    "rnz.co.nz": ("New Zealand appropriation", "Public"),
+    # ── Middle East ──────────────────────────────────────────────────
+    "haaretz.com": ("Subscription + advertising", "TASE: HRTZ"),
+    "jpost.com": ("Subscription + advertising", "Private"),
+    "ynetnews.com": ("Advertising + subscription", "Private (Yedioth)"),
+    "arabnews.com": ("Advertising · Saudi state-aligned", "Private (SRMG)"),
+    "almanar.com.lb": ("Lebanese political-movement funding", "Affiliated"),
+    "aa.com.tr": ("Turkish state appropriation", "Public-state"),
+    "trtworld.com": ("Turkish broadcast tax / state", "Public-state"),
+    "presstv.ir": ("Iranian state appropriation", "State"),
+    "milliyet.com.tr": ("Advertising + subscription", "Private (Demirören)"),
+    "hurriyetdailynews.com": ("Advertising + subscription", "Private (Demirören)"),
+    "aksam.com.tr": ("Advertising · pro-government conglomerate", "Private (Turkuvaz)"),
+    # ── Asia ─────────────────────────────────────────────────────────
+    "asahi.com": ("Subscription + advertising", "Private"),
+    "thehindu.com": ("Subscription + advertising", "Private (Kasturi & Sons)"),
+    "timesofindia.indiatimes.com": ("Advertising + subscription", "Private (BCCL)"),
+    "indianexpress.com": ("Subscription + advertising", "Private (Goenka)"),
+    "ndtv.com": ("Advertising + subscription · conglomerate-backed", "BSE: NDTV"),
+    "thewire.in": ("Donations + foundation grants", "Nonprofit"),
+    "straitstimes.com": ("Subscription + advertising (post-2022 nonprofit)", "Nonprofit trust"),
+    "channelnewsasia.com": ("Advertising + carriage fees · state holding", "State holding"),
+    # ── Africa ───────────────────────────────────────────────────────
+    "dailymaverick.co.za": ("Reader donations + advertising", "Independent"),
+    "newvision.co.ug": ("Advertising · Ugandan state-majority", "State"),
+    # ── State-controlled ─────────────────────────────────────────────
+    "aljazeera.com": ("Qatari state appropriation", "State"),
+    "rt.com": ("Russian state appropriation", "State"),
+    "sputniknews.com": ("Russian state appropriation", "State"),
+    "tass.com": ("Russian state appropriation", "State"),
+    "globaltimes.cn": ("Chinese state / CCP organ", "State"),
+    "xinhuanet.com": ("Chinese state news agency", "State"),
+    "cgtn.com": ("Chinese state broadcaster", "State"),
+    "chinadaily.com.cn": ("Chinese state newspaper", "State"),
+    "scmp.com": ("Subscription + advertising · Alibaba", "Private (Alibaba)"),
+    "vnexpress.net": ("Advertising · state-influenced corporate", "Private (FPT)"),
+    "vietnamnews.vn": ("Vietnamese state appropriation", "State"),
+    "nhandan.vn": ("Vietnamese Communist Party organ", "State"),
+    # ── Russian independent (in exile) ───────────────────────────────
+    "novayagazeta.eu": ("Reader donations + foundation grants (in exile)", "Independent"),
+    "meduza.io": ("Reader donations + foundation grants (in exile)", "Independent"),
+}
+
+for _domain, (_funding, _listed) in _FUNDING.items():
+    if _domain in _REGISTRY:
+        _REGISTRY[_domain] = _REGISTRY[_domain]._replace(
+            funding=_funding, listed=_listed
         )
 
 

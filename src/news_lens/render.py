@@ -492,6 +492,22 @@ html { scroll-behavior: smooth; }
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
+.owner-outlets .outlet-funding {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #f0efe8;
+}
+.owner-outlets .outlet-listed {
+  font-size: 11px;
+  color: #1f3a5f;
+  font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, monospace;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #e0ecfb;
+  letter-spacing: 0.01em;
+}
 
 .voices-stats {
   font-size: 13px;
@@ -2125,13 +2141,15 @@ def _render_table_of_contents(matrix: CoverageMatrix) -> str:
 
 _OWNERSHIP_INTRO = (
     "Manufacturing Consent calls ownership the propaganda model's first "
-    "filter — who owns a paper shapes who its editors answer to and what "
-    "they may quietly avoid covering. This section shows the corporate "
-    "or family parent for every outlet in the sample, grouped together "
-    "where two or more outlets share an ultimate owner. \"Independent\" "
-    "outlets are tagged too: trusts, cooperatives, nonprofits, and "
-    "reader-funded operations sit alongside the corporate-owned ones so "
-    "the distinction is visible at a glance."
+    "filter and advertising the second — who owns a paper, and how it "
+    "earns its revenue, shape who its editors answer to and what they "
+    "may quietly avoid covering. Each outlet's line shows its corporate "
+    "or family parent, the structural shape of its funding (subscription "
+    "vs advertising vs licence fee vs donor base vs state), and its "
+    "stock-exchange listing when publicly traded. Specific revenue and "
+    "margin numbers go stale within months, so the report tracks the "
+    "durable structure rather than this quarter's earnings — readers "
+    "who want current financials can follow the ticker."
 )
 
 
@@ -2191,11 +2209,28 @@ def _render_ownership_section(matrix: CoverageMatrix) -> str:
     for key, group in sorted_groups:
         is_unknown = key.startswith("__unknown__")
         css_class = "owner-group" + (" unknown" if is_unknown else "")
-        outlet_lis = "".join(
-            f"<li><span class=\"outlet-name\">{_esc(_outlet_display_name(d))}</span>"
-            f" <span class=\"outlet-domain\">{_esc(d)}</span></li>"
-            for d in group["domains"]
-        )
+        outlet_li_parts = []
+        for d in group["domains"]:
+            info = _outlet_lookup(d)
+            funding_html = ""
+            if info and info.funding:
+                funding_html = (
+                    f'<span class="outlet-funding">{_esc(info.funding)}</span>'
+                )
+            listed_html = ""
+            if info and info.listed:
+                listed_html = (
+                    f'<span class="outlet-listed">{_esc(info.listed)}</span>'
+                )
+            outlet_li_parts.append(
+                f"<li>"
+                f'<span class="outlet-name">{_esc(_outlet_display_name(d))}</span>'
+                f' <span class="outlet-domain">{_esc(d)}</span>'
+                f"{funding_html}"
+                f"{listed_html}"
+                f"</li>"
+            )
+        outlet_lis = "".join(outlet_li_parts)
         # Highlight the count for groups that actually share an owner.
         share_html = ""
         if not is_unknown and group["n"] > 1:

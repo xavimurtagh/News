@@ -160,3 +160,35 @@ def test_state_funded_outlets_have_owner_data():
         assert info is not None
         assert info.owner is not None
         assert "state" in info.owner.lower() or "ccp" in info.owner.lower() or "party" in info.owner.lower()
+
+
+def test_funding_field_populated_for_major_outlets():
+    """Major outlets carry a funding label so the ownership section can show it."""
+    for d in ("wsj.com", "nytimes.com", "theguardian.com", "bbc.com",
+              "rt.com", "propublica.org"):
+        info = lookup(d)
+        assert info is not None
+        assert info.funding, f"{d} should have a funding label"
+
+
+def test_listed_tickers_populated_for_public_companies():
+    """Publicly traded parents expose their stock ticker on each child outlet."""
+    for d, expect in [
+        ("wsj.com", "NWS"),
+        ("foxnews.com", "FOX"),
+        ("nytimes.com", "NYT"),
+        ("mirror.co.uk", "RCH"),
+        ("usatoday.com", "GCI"),
+    ]:
+        info = lookup(d)
+        assert info is not None
+        assert info.listed and expect in info.listed, (
+            f"{d}.listed should mention {expect}, got {info.listed!r}"
+        )
+
+
+def test_state_outlets_marked_state_in_funding():
+    for d in ("rt.com", "xinhuanet.com", "vietnamnews.vn"):
+        info = lookup(d)
+        assert info is not None
+        assert info.listed and "State" in info.listed
