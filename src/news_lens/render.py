@@ -368,6 +368,63 @@ section h2 {
   font-variant-numeric: tabular-nums;
 }
 
+.voices-stats {
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+.voices-list {
+  display: grid;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.voice-row {
+  background: var(--surface);
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) minmax(140px, 200px) 1fr;
+  gap: 14px;
+  padding: 10px 14px;
+  align-items: center;
+  font-size: 13px;
+}
+.voice-name {
+  font-weight: 600;
+  color: var(--text);
+}
+.voice-row.single .voice-name { color: var(--text-muted); font-weight: 500; }
+.voice-share {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.voice-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: #c5d8ee;
+  flex-shrink: 0;
+  min-width: 8px;
+}
+.voice-row.majority .voice-bar { background: #4ea16a; }
+.voice-row.minority .voice-bar { background: #d1a45b; }
+.voice-row.single .voice-bar { background: #b3786b; }
+.voice-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.voice-outlets {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+@media (max-width: 720px) {
+  .voice-row { grid-template-columns: 1fr; gap: 4px; }
+}
+
 .articles {
   display: grid;
   gap: 1px;
@@ -1810,12 +1867,109 @@ def _render_ownership_section(matrix: CoverageMatrix) -> str:
     )
 
 
+_VOICES_INTRO = (
+    "Named sources quoted across this sample, with the outlets that quoted "
+    "each. A source quoted by most outlets shapes what the \"official\" "
+    "account of the story looks like; a source quoted by only one or two "
+    "shapes the margins. Sources quoted by NO outlet in your sample don't "
+    "appear here — they are visible only by the questions you find yourself "
+    "asking. Use this section to spot one-source consensus and structural "
+    "absences."
+)
+
+
+def _normalize_source_name(name: str) -> str:
+    """Lowercase + collapse punctuation/whitespace for grouping near-duplicates.
+
+    The lens prompt asks the model to name sources, but the same person
+    can come back as \"Keir Starmer\", \"Sir Keir Starmer\", \"PM Keir
+    Starmer\", or \"Starmer\". Even simple lowercasing collapses many of
+    those into one another for aggregation purposes; we keep the
+    longest original spelling as the display label so the reader sees a
+    full name rather than the shortest reference.
+    """
+    return " ".join(name.lower().split())
+
+
+def _render_voices_section(matrix: CoverageMatrix, outlet_order: list[str]) -> str:
+    """Aggregate `sources_quoted` across all lenses; show who's quoted by whom."""
+    if not matrix.lenses:
+        return ""
+
+    # name_key -> { display, outlets: set[str] }
+    voices: dict[str, dict] = {}
+    for lens in matrix.lenses:
+        for source in lens.signals.sources_quoted:
+            source = (source or "").strip()
+            if not source:
+                continue
+            key = _normalize_source_name(source)
+            if not key:
+                continue
+            entry = voices.setdefault(key, {"display": source, "outlets": set()})
+            entry["outlets"].add(lens.outlet_domain)
+            # Keep the longest spelling as the display label.
+            if len(source) > len(entry["display"]):
+                entry["display"] = source
+
+    if not voices:
+        return ""
+
+    n_outlets = len(outlet_order)
+    rows = sorted(
+        voices.values(),
+        key=lambda v: (-len(v["outlets"]), v["display"].lower()),
+    )
+
+    # Headline metric: how many sources reached >half the outlets vs only one.
+    n_majority = sum(1 for r in rows if len(r["outlets"]) > n_outlets / 2)
+    n_single = sum(1 for r in rows if len(r["outlets"]) == 1)
+    stats_html = (
+        f"<div class=\"voices-stats\"><strong>{len(rows)}</strong> distinct "
+        f"named sources · <strong>{n_majority}</strong> quoted by a majority "
+        f"of outlets · <strong>{n_single}</strong> quoted by only one</div>"
+    )
+
+    row_parts = []
+    for entry in rows:
+        n = len(entry["outlets"])
+        pct = n / n_outlets if n_outlets else 0
+        outlets_html = ", ".join(
+            _esc(_outlet_display_name(d))
+            for d in outlet_order if d in entry["outlets"]
+        )
+        share_class = "majority" if n > n_outlets / 2 else (
+            "single" if n == 1 else "minority"
+        )
+        row_parts.append(
+            f"<div class=\"voice-row {share_class}\">"
+            f"<div class=\"voice-name\">{_esc(entry['display'])}</div>"
+            f"<div class=\"voice-share\">"
+            f"<div class=\"voice-bar\" style=\"width: {max(pct * 100, 6):.0f}%\"></div>"
+            f"<span class=\"voice-count\">{n} of {n_outlets}</span>"
+            f"</div>"
+            f"<div class=\"voice-outlets\">{outlets_html}</div>"
+            f"</div>"
+        )
+
+    return (
+        "<section class=\"voices\">"
+        "<h2>Voices in the story</h2>"
+        f"<p class=\"section-note\">{_VOICES_INTRO}</p>"
+        f"{stats_html}"
+        f"<div class=\"voices-list\">{''.join(row_parts)}</div>"
+        "</section>"
+    )
+
+
 def render_html(matrix: CoverageMatrix) -> str:
     outlet_order = _outlet_order(matrix.articles)
     n_articles = len(matrix.articles)
     n_outlets = len(outlet_order)
     n_claims = len(matrix.claims)
     generated = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
+    voices_section = _render_voices_section(matrix, outlet_order)
 
     framing_section = ""
     if matrix.lenses:
@@ -1866,6 +2020,7 @@ def render_html(matrix: CoverageMatrix) -> str:
         f"{_render_matrix(matrix, outlet_order)}"
         f"{_render_legend()}"
         "</section>"
+        f"{voices_section}"
         f"{framing_section}"
         "<section>"
         "<h2>Outlet Coverage Profile</h2>"

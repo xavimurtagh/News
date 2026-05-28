@@ -346,3 +346,46 @@ def test_ownership_section_states_concentration_metric():
     # corporate entity (also Murdoch). NYT stands alone.
     # The most-concentrated single corporate parent owns 2 of 4.
     assert "2 of 4" in html_doc
+
+
+def _lensed_matrix() -> CoverageMatrix:
+    now = datetime(2026, 5, 28, tzinfo=timezone.utc)
+    arts = [
+        Article(id="a1", url="https://nytimes.com/x", outlet_domain="nytimes.com",
+                title="t1", fetched_at=now, body="b", paragraph_count=2),
+        Article(id="a2", url="https://wsj.com/x", outlet_domain="wsj.com",
+                title="t2", fetched_at=now, body="b", paragraph_count=2),
+        Article(id="a3", url="https://theguardian.com/x", outlet_domain="theguardian.com",
+                title="t3", fetched_at=now, body="b", paragraph_count=2),
+    ]
+    def _lens(aid, dom, sources):
+        return ArticleLens(article_id=aid, outlet_domain=dom,
+            signals=LensSignals(headline_framing=HeadlineFraming.NEUTRAL,
+                                loaded_terms=[], sources_quoted=sources,
+                                stance_summary="s"))
+    lenses = [
+        _lens("a1", "nytimes.com", ["Keir Starmer", "Wes Streeting", "Andy Burnham"]),
+        _lens("a2", "wsj.com", ["Keir Starmer", "keir starmer", "Treasury source"]),
+        _lens("a3", "theguardian.com", ["Wes Streeting", "Andy Burnham", "Paul Nowak"]),
+    ]
+    return CoverageMatrix(articles=arts, claims=[], lenses=lenses)
+
+
+def test_voices_section_normalizes_and_aggregates():
+    html_doc = render_html(_lensed_matrix())
+    assert "Voices in the story" in html_doc
+    # Same source quoted twice in one article (Keir Starmer + lowercase variant)
+    # collapses to ONE row, quoted by 2 outlets total.
+    assert html_doc.count("Keir Starmer") >= 1
+    # 5 distinct sources total — Starmer, Streeting, Burnham, Nowak, Treasury source.
+    assert "<strong>5</strong> distinct named sources" in html_doc
+    # 3 quoted by majority (Starmer, Streeting, Burnham at 2 of 3 each)
+    assert "<strong>3</strong> quoted by a majority of outlets" in html_doc
+    assert "<strong>2</strong> quoted by only one" in html_doc
+
+
+def test_voices_section_omitted_when_no_lenses():
+    """No lens data means no voices section."""
+    matrix = _multi_outlet_matrix(["nytimes.com", "wsj.com"])
+    html_doc = render_html(matrix)
+    assert "Voices in the story" not in html_doc
