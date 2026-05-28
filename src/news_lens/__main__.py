@@ -240,6 +240,16 @@ def main() -> int:
         "that do not require auth.",
     )
     parser.add_argument(
+        "--no-omissions",
+        action="store_true",
+        help="Skip the structural-omissions LLM pass. By default, after "
+        "alignment, the pipeline runs one extra LLM call asking the model "
+        "to name perspectives, source classes, and contextual facts that "
+        "are absent from EVERY article in the sample — Manufacturing "
+        "Consent's deeper question. Disable when you want to save the "
+        "extra call or when the local model is too weak for the task.",
+    )
+    parser.add_argument(
         "--max-concurrency",
         type=int,
         default=2,
@@ -400,7 +410,12 @@ def main() -> int:
         return 2
 
     backend = _build_backend(args)
-    matrix = run_pipeline(urls, backend=backend, cache_dir=args.cache_dir)
+    matrix = run_pipeline(
+        urls,
+        backend=backend,
+        cache_dir=args.cache_dir,
+        omissions_enabled=not args.no_omissions,
+    )
     output_json = matrix.model_dump_json(indent=2)
 
     if args.output:

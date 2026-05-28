@@ -282,10 +282,67 @@ class SyndicationGroup(BaseModel):
     )
 
 
+class OmissionCategory(str, Enum):
+    """The kinds of absences a structural-omissions analysis can flag.
+
+    Mapped to the propaganda model's broader concern with what is
+    systematically *outside* mainstream coverage: viewpoints with stake
+    that are never quoted, classes of source that are never interviewed,
+    historical or structural context that is never provided, etc.
+    """
+
+    PERSPECTIVE = "perspective"      # a viewpoint with stake but no voice
+    SOURCE_CLASS = "source_class"    # a class of source (e.g. "affected workers") never quoted
+    CONTEXT = "context"              # historical/structural context never provided
+    COUNTERFACT = "counterfact"      # an established public-record fact that complicates the framing
+    SCOPE = "scope"                  # an angle on the story no outlet examined
+
+
+class StructuralOmission(BaseModel):
+    """One specific absence the analysis flags as worth scrutinising.
+
+    The model is asked to BE SPECIFIC. \"More voices needed\" or
+    \"missing context\" are not useful; the goal is a sentence a reader
+    can actually take to a search engine.
+    """
+
+    category: OmissionCategory = Field(
+        description="Which structural axis this absence sits on."
+    )
+    description: str = Field(
+        description=(
+            "One specific sentence naming what is absent from EVERY article "
+            "in the sample. Be concrete: name the perspective, source class, "
+            "fact, or angle."
+        )
+    )
+    why_relevant: str = Field(
+        description=(
+            "One sentence explaining why a careful editor would expect this "
+            "to be present in any responsible coverage of the story."
+        )
+    )
+
+
+class OmissionAnalysis(BaseModel):
+    """Result of running a structural-omissions pass over the whole sample."""
+
+    omissions: List[StructuralOmission] = Field(default_factory=list)
+    sample_caveat: Optional[str] = Field(
+        default=None,
+        description=(
+            "If the sample is too small, too lopsided, or otherwise unsuited "
+            "to a structural-omissions claim, the analysis can say so here "
+            "instead of fabricating absences. Surfaced in the report header."
+        ),
+    )
+
+
 class CoverageMatrix(BaseModel):
-    """End-to-end pipeline output: articles, tiered claims, lens, syndication."""
+    """End-to-end pipeline output: articles, tiered claims, lens, syndication, omissions."""
 
     articles: List[Article]
     claims: List[TieredClaim]
     lenses: List[ArticleLens] = Field(default_factory=list)
     syndication_groups: List[SyndicationGroup] = Field(default_factory=list)
+    omissions: Optional[OmissionAnalysis] = None

@@ -203,6 +203,7 @@ async def _run_async(
     urls: list[str],
     llm: StructuredLLM,
     cache: Cache,
+    analyze_omissions_flag: bool = True,
 ) -> CoverageMatrix:
     print(f"Fetching {len(urls)} article(s)", file=sys.stderr)
     fetch_results = await asyncio.gather(
@@ -257,11 +258,22 @@ async def _run_async(
     ]
     tiered.sort(key=lambda c: _TIER_ORDER[c.tier])
 
+    omissions = None
+    if analyze_omissions_flag:
+        from .omissions import analyze_omissions
+        print("Running structural-omissions analysis", file=sys.stderr)
+        omissions = await analyze_omissions(
+            articles, extractions, alignment, lenses, llm, cache
+        )
+        n = len(omissions.omissions) if omissions else 0
+        print(f"  -> {n} omission(s) flagged", file=sys.stderr)
+
     return CoverageMatrix(
         articles=articles,
         claims=tiered,
         lenses=lenses,
         syndication_groups=syndication_groups,
+        omissions=omissions,
     )
 
 
@@ -270,6 +282,7 @@ def run_pipeline(
     backend: StructuredLLM | None = None,
     cache_dir: Path | None = None,
     api_key: str | None = None,
+    omissions_enabled: bool = True,
 ) -> CoverageMatrix:
     """Run the pipeline end-to-end.
 
@@ -288,4 +301,4 @@ def run_pipeline(
                 api_key=api_key or os.environ.get("ANTHROPIC_API_KEY")
             )
         )
-    return asyncio.run(_run_async(urls, backend, cache))
+    return asyncio.run(_run_async(urls, backend, cache, omissions_enabled))

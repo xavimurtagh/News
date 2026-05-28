@@ -33,6 +33,7 @@ from .models import (
     GroundingFlag,
     HeadlineFraming,
     LoadedTerm,
+    OmissionCategory,
     OutletCoverage,
     Provenance,
     SyndicationGroup,
@@ -496,6 +497,65 @@ html { scroll-behavior: smooth; }
   font-size: 13px;
   color: var(--text);
   margin-bottom: 12px;
+}
+
+.omissions-caveat {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-muted);
+  background: #fbfbf6;
+  border: 1px solid var(--border);
+  border-left: 3px solid #d97706;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 14px;
+}
+.omissions-list {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 720px) {
+  .omissions-list { grid-template-columns: 1fr 1fr; }
+}
+.omission-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 12px 14px;
+}
+.omission-card[data-category="perspective"] { border-left-color: #2563eb; }
+.omission-card[data-category="source_class"] { border-left-color: #6d28d9; }
+.omission-card[data-category="context"] { border-left-color: #4ea16a; }
+.omission-card[data-category="counterfact"] { border-left-color: #c0392b; }
+.omission-card[data-category="scope"] { border-left-color: #d97706; }
+.omission-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+.omission-tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.omission-desc {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 14px;
+  margin: 0 0 8px;
+  color: var(--text);
+  line-height: 1.5;
+}
+.omission-why {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+  font-style: italic;
 }
 .voices-list {
   display: grid;
@@ -2043,6 +2103,11 @@ def _render_table_of_contents(matrix: CoverageMatrix) -> str:
         items.append(("matrix", "Coverage Matrix"))
     if matrix.lenses:
         items.append(("voices", "Voices in the story"))
+    if matrix.omissions is not None and (
+        matrix.omissions.omissions or matrix.omissions.sample_caveat
+    ):
+        items.append(("omissions", "Structural omissions"))
+    if matrix.lenses:
         items.append(("framing", "Per-Article Framing"))
     items.append(("profile", "Outlet Coverage Profile"))
 
@@ -2252,6 +2317,73 @@ def _render_voices_section(matrix: CoverageMatrix, outlet_order: list[str]) -> s
     )
 
 
+_OMISSIONS_INTRO = (
+    "Voices in the story shows who WAS quoted; this section asks what was "
+    "NOT. The model was given the canonical-claim list, the outlet sample, "
+    "and the aggregate sources quoted across the sample, and asked to "
+    "name perspectives, source classes, historical context, and "
+    "public-record counter-facts that none of the articles included but a "
+    "careful editor would expect. Each item is a starting point for the "
+    "reader's own scrutiny — not a verdict that the absence is real."
+)
+
+_OMISSION_CATEGORY_LABEL = {
+    OmissionCategory.PERSPECTIVE: "Perspective missing",
+    OmissionCategory.SOURCE_CLASS: "Source class not quoted",
+    OmissionCategory.CONTEXT: "Context not provided",
+    OmissionCategory.COUNTERFACT: "Counter-fact elided",
+    OmissionCategory.SCOPE: "Angle not examined",
+}
+
+
+def _render_omissions_section(matrix: CoverageMatrix) -> str:
+    """Render the structural-omissions panel; empty if the analysis wasn't run."""
+    analysis = matrix.omissions
+    if analysis is None:
+        return ""
+    if not analysis.omissions and not analysis.sample_caveat:
+        return ""
+
+    caveat_html = ""
+    if analysis.sample_caveat:
+        caveat_html = (
+            f'<p class="omissions-caveat">{_esc(analysis.sample_caveat)}</p>'
+        )
+
+    if not analysis.omissions:
+        return (
+            '<section id="omissions" class="omissions">'
+            "<h2>Structural omissions</h2>"
+            f'<p class="section-note">{_OMISSIONS_INTRO}</p>'
+            f"{caveat_html}"
+            "</section>"
+        )
+
+    cards = []
+    for om in analysis.omissions:
+        label = _OMISSION_CATEGORY_LABEL.get(
+            om.category, om.category.value.replace("_", " ").title()
+        )
+        cards.append(
+            f'<div class="omission-card" data-category="{om.category.value}">'
+            f'<div class="omission-head">'
+            f'<span class="omission-tag">{_esc(label)}</span>'
+            f"</div>"
+            f'<p class="omission-desc">{_esc(om.description)}</p>'
+            f'<p class="omission-why">{_esc(om.why_relevant)}</p>'
+            f"</div>"
+        )
+
+    return (
+        '<section id="omissions" class="omissions">'
+        "<h2>Structural omissions</h2>"
+        f'<p class="section-note">{_OMISSIONS_INTRO}</p>'
+        f"{caveat_html}"
+        f'<div class="omissions-list">{"".join(cards)}</div>'
+        "</section>"
+    )
+
+
 def render_html(matrix: CoverageMatrix) -> str:
     outlet_order = _outlet_order(matrix.articles)
     n_articles = len(matrix.articles)
@@ -2260,6 +2392,7 @@ def render_html(matrix: CoverageMatrix) -> str:
     generated = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
     voices_section = _render_voices_section(matrix, outlet_order)
+    omissions_section = _render_omissions_section(matrix)
 
     framing_section = ""
     if matrix.lenses:
@@ -2312,6 +2445,7 @@ def render_html(matrix: CoverageMatrix) -> str:
         f"{_render_legend()}"
         "</section>"
         f"{voices_section}"
+        f"{omissions_section}"
         f"{framing_section}"
         '<section id="profile">'
         "<h2>Outlet Coverage Profile</h2>"

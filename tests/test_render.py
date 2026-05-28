@@ -490,3 +490,60 @@ def test_matrix_shows_internal_divergence_within_syndication_group():
     assert "mixed-syndication" in html_doc
     # The citation block names the diverging member explicitly.
     assert "diverges" in html_doc
+
+
+def _omissions_matrix() -> CoverageMatrix:
+    """A matrix carrying a small OmissionAnalysis for render testing."""
+    from news_lens.models import (
+        OmissionAnalysis, OmissionCategory, StructuralOmission,
+    )
+
+    base = _multi_outlet_matrix(["nytimes.com", "wsj.com", "theguardian.com"])
+    base.omissions = OmissionAnalysis(omissions=[
+        StructuralOmission(
+            category=OmissionCategory.SOURCE_CLASS,
+            description="No frontline aid worker quoted in any article.",
+            why_relevant="A humanitarian story without frontline accounts elides distribution realities.",
+        ),
+        StructuralOmission(
+            category=OmissionCategory.COUNTERFACT,
+            description="None of the articles cite the 2024 OECD report on the policy's net effect.",
+            why_relevant="The OECD figures directly complicate the consensus framing.",
+        ),
+    ])
+    return base
+
+
+def test_omissions_section_renders_when_analysis_present():
+    html_doc = render_html(_omissions_matrix())
+    assert "Structural omissions" in html_doc
+    assert "frontline aid worker" in html_doc
+    assert "OECD" in html_doc
+    # Categories show as labels.
+    assert "Source class not quoted" in html_doc
+    assert "Counter-fact elided" in html_doc
+    # TOC links to the section.
+    assert 'href="#omissions"' in html_doc
+
+
+def test_omissions_section_hidden_when_no_analysis():
+    """Matrix without OmissionAnalysis renders no omissions section."""
+    html_doc = render_html(_multi_outlet_matrix(["nytimes.com", "wsj.com"]))
+    assert "Structural omissions" not in html_doc
+    assert 'href="#omissions"' not in html_doc
+
+
+def test_omissions_section_shows_sample_caveat_only():
+    """When the LLM couldn't ground the analysis, the section shows the caveat."""
+    from news_lens.models import OmissionAnalysis
+
+    matrix = _multi_outlet_matrix(["nytimes.com", "wsj.com", "theguardian.com"])
+    matrix.omissions = OmissionAnalysis(
+        omissions=[],
+        sample_caveat="Sample too narrow to support structural-omissions claims.",
+    )
+    html_doc = render_html(matrix)
+    assert "Structural omissions" in html_doc
+    assert "Sample too narrow" in html_doc
+    # No omission cards, just the caveat.
+    assert 'class="omission-card"' not in html_doc
