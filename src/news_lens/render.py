@@ -41,6 +41,7 @@ from .models import (
 from .outlets import SPECTRUM_ORDER
 from .outlets import display_name as _outlet_display_name
 from .outlets import lookup as _outlet_lookup
+from .outlets import ownership_summary as _ownership_summary
 
 
 def _esc(value: str | None) -> str:
@@ -298,6 +299,73 @@ section h2 {
   border-top: 1px solid var(--border);
   padding-top: 8px;
   margin-top: 8px;
+}
+
+.ownership-stats {
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.ownership-groups {
+  display: grid;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+.owner-group {
+  background: var(--surface);
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+.owner-group.unknown { background: #fbfbf6; }
+.owner-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.owner-group.unknown .owner-label { color: var(--text-subtle); font-weight: 500; }
+.owner-share {
+  font-family: -apple-system, system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: #fef3c7;
+  color: #92400e;
+  text-transform: uppercase;
+}
+.owner-outlets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+.owner-outlets li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.owner-outlets .outlet-name {
+  color: var(--text);
+  font-weight: 500;
+}
+.owner-outlets .outlet-domain {
+  color: var(--text-subtle);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .articles {
@@ -1643,6 +1711,105 @@ def _render_sample_banner(matrix: CoverageMatrix) -> str:
     )
 
 
+_OWNERSHIP_INTRO = (
+    "Manufacturing Consent calls ownership the propaganda model's first "
+    "filter — who owns a paper shapes who its editors answer to and what "
+    "they may quietly avoid covering. This section shows the corporate "
+    "or family parent for every outlet in the sample, grouped together "
+    "where two or more outlets share an ultimate owner. \"Independent\" "
+    "outlets are tagged too: trusts, cooperatives, nonprofits, and "
+    "reader-funded operations sit alongside the corporate-owned ones so "
+    "the distinction is visible at a glance."
+)
+
+
+def _render_ownership_section(matrix: CoverageMatrix) -> str:
+    """Group outlets in this sample by ultimate owner.
+
+    Surfaces ownership concentration (e.g. \"five of these are News Corp
+    papers\") and tags the independents (Scott Trust, nonprofits,
+    cooperatives) honestly so the reader can weigh independence claims.
+    """
+    if not matrix.articles:
+        return ""
+
+    seen: set[str] = set()
+    domains: list[str] = []
+    for a in matrix.articles:
+        if a.outlet_domain not in seen:
+            seen.add(a.outlet_domain)
+            domains.append(a.outlet_domain)
+    summary = _ownership_summary(domains)
+    n = summary["n_outlets"]
+
+    # Sort groups largest-first; unknowns last (we mark them with the
+    # __unknown__ prefix to make this easy).
+    sorted_groups = sorted(
+        summary["by_owner_key"].items(),
+        key=lambda kv: (kv[0].startswith("__unknown__"), -kv[1]["n"], kv[1]["label"]),
+    )
+
+    largest_share = summary["largest_share"]
+    largest_pct = largest_share / n if n else 0
+    # Pick a single sentence to name the most-concentrated owner.
+    top_group = sorted_groups[0][1] if sorted_groups else None
+    if top_group and not sorted_groups[0][0].startswith("__unknown__") and top_group["n"] > 1:
+        concentration_sentence = (
+            f"The most concentrated single owner in this sample is "
+            f"<strong>{_esc(top_group['label'])}</strong>, holding "
+            f"{top_group['n']} of {n} outlets ({largest_pct:.0%})."
+        )
+    else:
+        concentration_sentence = (
+            "No two outlets in this sample share an ultimate owner — "
+            "concentration is not a concern here."
+        )
+
+    n_known_owners = summary["n_owners"] - summary["n_unknown"]
+    stats_html = (
+        f"<div class=\"ownership-stats\"><strong>{n}</strong> outlet"
+        f"{'' if n == 1 else 's'} · "
+        f"<strong>{n_known_owners}</strong> distinct known owner"
+        f"{'' if n_known_owners == 1 else 's'}"
+        f" · {summary['n_unknown']} unclassified</div>"
+        f"<p class=\"section-note\">{concentration_sentence}</p>"
+    )
+
+    group_html_parts = []
+    for key, group in sorted_groups:
+        is_unknown = key.startswith("__unknown__")
+        css_class = "owner-group" + (" unknown" if is_unknown else "")
+        outlet_lis = "".join(
+            f"<li><span class=\"outlet-name\">{_esc(_outlet_display_name(d))}</span>"
+            f" <span class=\"outlet-domain\">{_esc(d)}</span></li>"
+            for d in group["domains"]
+        )
+        # Highlight the count for groups that actually share an owner.
+        share_html = ""
+        if not is_unknown and group["n"] > 1:
+            share_html = (
+                f"<span class=\"owner-share\">"
+                f"{group['n']} of {n} outlets ({group['n'] / n:.0%})"
+                f"</span>"
+            )
+        group_html_parts.append(
+            f"<div class=\"{css_class}\">"
+            f"<div class=\"owner-label\">{_esc(group['label'])}{share_html}</div>"
+            f"<ul class=\"owner-outlets\">{outlet_lis}</ul>"
+            f"</div>"
+        )
+
+    groups_html = "".join(group_html_parts)
+    return (
+        "<section class=\"ownership\">"
+        "<h2>Who owns these outlets</h2>"
+        f"<p class=\"section-note\">{_OWNERSHIP_INTRO}</p>"
+        f"{stats_html}"
+        f"<div class=\"ownership-groups\">{groups_html}</div>"
+        "</section>"
+    )
+
+
 def render_html(matrix: CoverageMatrix) -> str:
     outlet_order = _outlet_order(matrix.articles)
     n_articles = len(matrix.articles)
@@ -1682,6 +1849,7 @@ def render_html(matrix: CoverageMatrix) -> str:
         "<h2>Articles</h2>"
         f"{_render_articles(matrix.articles, outlet_order, matrix.syndication_groups, matrix.lenses)}"
         "</section>"
+        f"{_render_ownership_section(matrix)}"
         "<section>"
         "<h2>Story at a Glance</h2>"
         f"{_render_summary(matrix)}"

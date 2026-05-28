@@ -112,3 +112,51 @@ def test_public_broadcasters_tagged():
         assert info is not None
         assert info.tier == "public", f"{domain} should be tier=public"
 
+
+
+def test_ownership_field_populated_for_major_outlets():
+    """Curated owners reach the OutletInfo for entries with known ownership."""
+    for d in ("wsj.com", "foxnews.com", "nytimes.com", "theguardian.com"):
+        info = lookup(d)
+        assert info is not None
+        assert info.owner is not None, f"{d} should have owner data"
+        assert info.owner_key is not None
+
+
+def test_news_corp_outlets_share_owner_key():
+    """Murdoch-controlled News Corp papers group on a single owner_key."""
+    keys = {lookup(d).owner_key for d in ("wsj.com", "nypost.com", "thetimes.com")}
+    assert len(keys) == 1
+
+
+def test_ownership_summary_groups_shared_owners():
+    """Two Reach plc papers collapse into one owner group."""
+    from news_lens.outlets import ownership_summary
+
+    summary = ownership_summary([
+        "mirror.co.uk", "express.co.uk",  # both Reach plc
+        "theguardian.com",
+        "unknown-blog.example",
+    ])
+    # Reach + Guardian + Unknown = 3 distinct groups
+    assert summary["n_outlets"] == 4
+    assert summary["n_unknown"] == 1
+    # Reach plc concentrates 2 of 4 outlets.
+    assert summary["largest_share"] == 2
+
+
+def test_ownership_summary_handles_empty_input():
+    from news_lens.outlets import ownership_summary
+
+    summary = ownership_summary([])
+    assert summary["n_outlets"] == 0
+    assert summary["largest_share"] == 0
+
+
+def test_state_funded_outlets_have_owner_data():
+    """State outlets should have owner labels naming the funding government."""
+    for d in ("rt.com", "xinhuanet.com", "aljazeera.com", "vietnamnews.vn"):
+        info = lookup(d)
+        assert info is not None
+        assert info.owner is not None
+        assert "state" in info.owner.lower() or "ccp" in info.owner.lower() or "party" in info.owner.lower()

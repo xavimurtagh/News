@@ -301,3 +301,48 @@ def test_sample_banner_flags_single_outlet_runs():
     # Spectrum-gap notes should NOT fire alongside the single-outlet note.
     assert "leans left" not in banner
     assert "commercial-mainstream" not in banner
+
+
+def _multi_outlet_matrix(domains: list[str]) -> CoverageMatrix:
+    now = datetime(2026, 5, 28, tzinfo=timezone.utc)
+    articles = [
+        Article(
+            id=f"a{i}", url=f"https://{d}/x", outlet_domain=d,
+            title=f"{d} story", fetched_at=now, body="b", paragraph_count=2,
+        )
+        for i, d in enumerate(domains)
+    ]
+    return CoverageMatrix(articles=articles, claims=[])
+
+
+def test_ownership_section_groups_shared_owners():
+    """Murdoch-controlled News Corp papers collapse into one owner group."""
+    html_doc = render_html(_multi_outlet_matrix(
+        ["wsj.com", "nypost.com", "thetimes.com", "theguardian.com"]
+    ))
+    assert "Who owns these outlets" in html_doc
+    # News Corp owns 3 of 4 outlets in this sample.
+    assert "News Corp" in html_doc
+    assert "3 of 4 outlets" in html_doc
+    # Guardian appears in its own (Scott Trust) group.
+    assert "Scott Trust" in html_doc
+
+
+def test_ownership_section_flags_unknown_outlets():
+    """An outlet not in the registry shows up as 'Unknown' rather than being silently dropped."""
+    html_doc = render_html(_multi_outlet_matrix([
+        "nytimes.com", "some-random-blog.example",
+    ]))
+    assert "Unknown" in html_doc
+    assert "some-random-blog.example" in html_doc
+
+
+def test_ownership_section_states_concentration_metric():
+    """The headline sentence quantifies the largest single owner."""
+    html_doc = render_html(_multi_outlet_matrix([
+        "wsj.com", "foxnews.com", "thetimes.com", "nytimes.com",
+    ]))
+    # WSJ + Times share News Corp (both Murdoch). Fox is a separate
+    # corporate entity (also Murdoch). NYT stands alone.
+    # The most-concentrated single corporate parent owns 2 of 4.
+    assert "2 of 4" in html_doc
