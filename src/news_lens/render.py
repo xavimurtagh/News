@@ -184,6 +184,98 @@ def _coverage_by_outlet(
     return out
 
 
+_CELL_STATUS_PRIORITY = {
+    CoverageStatus.CONTRADICTED: 3,
+    CoverageStatus.ASSERTED: 2,
+    CoverageStatus.ATTRIBUTED: 1,
+    CoverageStatus.OMITTED: 0,
+}
+
+
+def _build_syndication_view(
+    outlet_order: list[str],
+    syndication_groups: list[SyndicationGroup],
+    articles: list[Article],
+) -> tuple[list[str], dict[str, list[str]], dict[str, str]]:
+    """Reduce the column list when articles are wire-syndicated copies.
+
+    Returns (reps, rep_members, member_to_rep).
+
+    - reps: outlet domains in display order, one per syndication cluster
+      (or per standalone outlet).
+    - rep_members: rep outlet -> list of all member outlets, rep first.
+    - member_to_rep: any outlet -> its rep.
+
+    The first outlet in each syndication group (as it appears in
+    outlet_order) is the rep — keeps the visual head stable instead of
+    the order shifting around as syndication groups are discovered.
+    """
+    if not syndication_groups:
+        return outlet_order, {o: [o] for o in outlet_order}, {o: o for o in outlet_order}
+
+    articles_by_id = {a.id: a for a in articles}
+    member_to_rep: dict[str, str] = {}
+    rep_members: dict[str, list[str]] = {}
+
+    for group in syndication_groups:
+        group_outlets = [
+            articles_by_id[aid].outlet_domain
+            for aid in group.article_ids
+            if aid in articles_by_id
+        ]
+        # Rep = the first group outlet in outlet_order so the head stays stable.
+        rep = next((o for o in outlet_order if o in group_outlets), None)
+        if rep is None:
+            continue
+        for o in group_outlets:
+            member_to_rep[o] = rep
+        members_sorted = [rep] + [o for o in group_outlets if o != rep]
+        rep_members[rep] = members_sorted
+
+    # Standalone outlets are their own rep.
+    for o in outlet_order:
+        if o not in member_to_rep:
+            member_to_rep[o] = o
+            rep_members.setdefault(o, [o])
+
+    reps = []
+    seen_reps: set[str] = set()
+    for o in outlet_order:
+        r = member_to_rep[o]
+        if r not in seen_reps:
+            seen_reps.add(r)
+            reps.append(r)
+    return reps, rep_members, member_to_rep
+
+
+def _collapse_for_rep(
+    coverage: list[OutletCoverage],
+    rep_members: dict[str, list[str]],
+    member_to_rep: dict[str, str],
+) -> dict[str, list[OutletCoverage]]:
+    """Group a claim's per-outlet coverage by syndication rep.
+
+    Returns {rep: [coverage_entries...]}. The caller picks a
+    representative entry for the cell glyph and renders all entries
+    (including those from other members of the syndication group) in the
+    expanded citation view, so wire-copy syndication is visible without
+    inflating the column count.
+    """
+    grouped: dict[str, list[OutletCoverage]] = {}
+    for cov in coverage:
+        rep = member_to_rep.get(cov.outlet_domain, cov.outlet_domain)
+        grouped.setdefault(rep, []).append(cov)
+    return grouped
+
+
+def _pick_rep_status(entries: list[OutletCoverage]) -> OutletCoverage:
+    """Strongest non-omitted status wins; ties keep the first encountered."""
+    return max(
+        entries,
+        key=lambda c: (_CELL_STATUS_PRIORITY[c.status], -entries.index(c)),
+    )
+
+
 _CSS = """\
 :root {
   --bg: #fafaf7;
@@ -561,6 +653,39 @@ html { scroll-behavior: smooth; }
   text-align: center;
   font-family: -apple-system, system-ui, sans-serif;
   text-transform: lowercase;
+}
+.matrix-head .outlet-col.syndicated {
+  font-weight: 600;
+  color: var(--accent);
+  cursor: help;
+}
+.syndication-count {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 6px;
+  background: #eef2ff;
+  color: #3730a3;
+  vertical-align: middle;
+}
+.cell.mixed-syndication {
+  outline: 1.5px dashed var(--tier-disputed);
+  outline-offset: -2px;
+}
+.syndication-also {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  font-style: italic;
+}
+.syndication-divergent {
+  font-size: 11px;
+  color: var(--text);
+  margin-top: 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 details.tier {
@@ -1200,11 +1325,25 @@ def _render_articles(
     return f'<div class="articles">{"".join(rows)}</div>'
 
 
-def _render_matrix_head(outlet_order: list[str]) -> str:
+def _render_matrix_head(
+    outlet_order: list[str],
+    rep_members: dict[str, list[str]],
+) -> str:
     grid = _grid_template(len(outlet_order))
-    cols = "".join(
-        f'<div class="outlet-col">{_esc(o)}</div>' for o in outlet_order
-    )
+    cols_parts = []
+    for o in outlet_order:
+        members = rep_members.get(o, [o])
+        if len(members) > 1:
+            others = ", ".join(m for m in members if m != o)
+            cols_parts.append(
+                f'<div class="outlet-col syndicated" '
+                f'title="Also carried verbatim by: {_esc(others)}">'
+                f"{_esc(o)} <span class=\"syndication-count\">+{len(members) - 1}</span>"
+                f"</div>"
+            )
+        else:
+            cols_parts.append(f'<div class="outlet-col">{_esc(o)}</div>')
+    cols = "".join(cols_parts)
     return (
         f'<div class="matrix-head" style="{grid}">'
         f'<div>Canonical claim</div>{cols}'
@@ -1212,17 +1351,37 @@ def _render_matrix_head(outlet_order: list[str]) -> str:
     )
 
 
-def _render_cells(claim: TieredClaim, outlet_order: list[str]) -> str:
-    by_outlet = _coverage_by_outlet(claim.outlets)
+def _render_cells(
+    claim: TieredClaim,
+    outlet_order: list[str],
+    rep_members: dict[str, list[str]],
+    member_to_rep: dict[str, str],
+) -> str:
+    grouped = _collapse_for_rep(claim.outlets, rep_members, member_to_rep)
     cells = []
-    for outlet in outlet_order:
-        cov = by_outlet.get(outlet)
-        if cov is None:
+    for rep in outlet_order:
+        entries = grouped.get(rep, [])
+        if not entries:
             cells.append('<span class="cell omitted">○</span>')
             continue
+        cov = _pick_rep_status(entries)
         glyph = _STATUS_GLYPH[cov.status]
         cls = cov.status.value
-        cells.append(f'<span class="cell {cls}">{glyph}</span>')
+        # When a syndication group contains both ASSERTED and
+        # CONTRADICTED entries, mark the cell so the reader can see the
+        # internal divergence (one outlet edited the wire to disagree).
+        statuses = {e.status for e in entries if e.status != CoverageStatus.OMITTED}
+        if (
+            len(statuses) > 1
+            and CoverageStatus.CONTRADICTED in statuses
+        ):
+            cells.append(
+                f'<span class="cell {cls} mixed-syndication" '
+                f'title="Syndication group contains both contradicting and '
+                f'asserting outlets">{glyph}</span>'
+            )
+        else:
+            cells.append(f'<span class="cell {cls}">{glyph}</span>')
     return "".join(cells)
 
 
@@ -1244,13 +1403,27 @@ def _render_citations(
     outlet_order: list[str],
     articles_by_id: dict[str, Article],
     lenses_by_id: dict[str, ArticleLens],
+    rep_members: dict[str, list[str]],
+    member_to_rep: dict[str, str],
 ) -> str:
-    by_outlet = _coverage_by_outlet(claim.outlets)
+    grouped = _collapse_for_rep(claim.outlets, rep_members, member_to_rep)
     parts = []
-    for outlet in outlet_order:
-        cov = by_outlet.get(outlet)
-        if cov is None:
+    for rep in outlet_order:
+        entries = grouped.get(rep, [])
+        if not entries:
             continue
+        # Display order: representative first, others as listed members.
+        members_order = rep_members.get(rep, [rep])
+        entries_sorted = sorted(
+            entries,
+            key=lambda e: (
+                members_order.index(e.outlet_domain)
+                if e.outlet_domain in members_order
+                else len(members_order)
+            ),
+        )
+        cov = entries_sorted[0]
+        other_entries = entries_sorted[1:]
         status_label = _STATUS_LABEL[cov.status]
         status_cls = cov.status.value
 
@@ -1301,7 +1474,37 @@ def _render_citations(
                     f' <span class="position-label">{_esc(label)}</span>'
                 )
 
-        outlet_friendly = _outlet_display_name(outlet)
+        outlet_friendly = _outlet_display_name(cov.outlet_domain)
+
+        # Make wire-syndication visible in the citation block: if
+        # other members of the rep's syndication group also carry this
+        # claim, list them under the quote rather than hiding them.
+        syndication_html = ""
+        if other_entries:
+            same_status_others = [
+                e for e in other_entries if e.status == cov.status
+            ]
+            divergent_others = [
+                e for e in other_entries if e.status != cov.status
+            ]
+            if same_status_others:
+                names = ", ".join(
+                    _esc(_outlet_display_name(e.outlet_domain))
+                    for e in same_status_others
+                )
+                syndication_html += (
+                    f'<div class="syndication-also">Also '
+                    f"{_esc(status_label.lower())} by {names}.</div>"
+                )
+            for e in divergent_others:
+                syndication_html += (
+                    f'<div class="syndication-divergent">'
+                    f"{_esc(_outlet_display_name(e.outlet_domain))} "
+                    f"diverges: "
+                    f'<span class="status-pill {e.status.value}">'
+                    f"{_esc(_STATUS_LABEL[e.status])}</span></div>"
+                )
+
         parts.append(
             f'<div class="citation"{framing_attr}>'
             f'<div class="outlet-cell">'
@@ -1311,7 +1514,7 @@ def _render_citations(
             f"{framing_html}"
             f"{position_html}"
             f"</div>"
-            f"<div>{quote_html}{attr_html}</div>"
+            f"<div>{quote_html}{attr_html}{syndication_html}</div>"
             f"</div>"
         )
     return f'<div class="citations">{"".join(parts)}</div>'
@@ -1337,9 +1540,15 @@ def _render_claim(
     outlet_order: list[str],
     articles_by_id: dict[str, Article],
     lenses_by_id: dict[str, ArticleLens],
+    rep_members: dict[str, list[str]],
+    member_to_rep: dict[str, str],
 ) -> str:
     grid = _grid_template(len(outlet_order))
-    cells = _render_cells(claim, outlet_order)
+    cells = _render_cells(claim, outlet_order, rep_members, member_to_rep)
+    citations = _render_citations(
+        claim, outlet_order, articles_by_id, lenses_by_id,
+        rep_members, member_to_rep,
+    )
     return (
         f'<details class="claim">'
         f'<summary style="{grid}">'
@@ -1349,7 +1558,7 @@ def _render_claim(
         f"</span>"
         f"{cells}"
         f"</summary>"
-        f"{_render_citations(claim, outlet_order, articles_by_id, lenses_by_id)}"
+        f"{citations}"
         f"</details>"
     )
 
@@ -1360,9 +1569,15 @@ def _render_tier_section(
     outlet_order: list[str],
     articles_by_id: dict[str, Article],
     lenses_by_id: dict[str, ArticleLens],
+    rep_members: dict[str, list[str]],
+    member_to_rep: dict[str, str],
 ) -> str:
     rows = "".join(
-        _render_claim(c, outlet_order, articles_by_id, lenses_by_id) for c in claims
+        _render_claim(
+            c, outlet_order, articles_by_id, lenses_by_id,
+            rep_members, member_to_rep,
+        )
+        for c in claims
     )
     return (
         f'<details class="tier" data-tier="{tier.value}" open>'
@@ -1381,6 +1596,12 @@ def _render_matrix(matrix: CoverageMatrix, outlet_order: list[str]) -> str:
     for c in matrix.claims:
         by_tier[c.tier].append(c)
 
+    # Collapse wire-syndication groups so the matrix shows one column per
+    # independent voice rather than 14 columns of identical wire copy.
+    reps, rep_members, member_to_rep = _build_syndication_view(
+        outlet_order, matrix.syndication_groups, matrix.articles
+    )
+
     articles_by_id = {a.id: a for a in matrix.articles}
     lenses_by_id = {l.article_id: l for l in matrix.lenses}
     sections = []
@@ -1388,10 +1609,16 @@ def _render_matrix(matrix: CoverageMatrix, outlet_order: list[str]) -> str:
         if tier in by_tier:
             sections.append(
                 _render_tier_section(
-                    tier, by_tier[tier], outlet_order, articles_by_id, lenses_by_id
+                    tier, by_tier[tier], reps, articles_by_id, lenses_by_id,
+                    rep_members, member_to_rep,
                 )
             )
-    return f'<div class="matrix-frame">{_render_matrix_head(outlet_order)}{"".join(sections)}</div>'
+    return (
+        '<div class="matrix-frame">'
+        f"{_render_matrix_head(reps, rep_members)}"
+        f"{''.join(sections)}"
+        "</div>"
+    )
 
 
 def _render_summary(matrix: CoverageMatrix) -> str:

@@ -415,3 +415,78 @@ def test_table_of_contents_omits_links_for_absent_sections():
     assert 'href="#articles"' in html_doc
     assert 'href="#ownership"' in html_doc
     assert 'href="#profile"' in html_doc
+
+
+def _syndication_matrix() -> CoverageMatrix:
+    """Three Newsquest papers running identical wire copy, plus a Guardian outlier."""
+    from news_lens.models import SyndicationGroup
+
+    now = datetime(2026, 5, 28, tzinfo=timezone.utc)
+    arts = [
+        Article(id="a1", url="https://theguardian.com/x", outlet_domain="theguardian.com",
+                title="Guardian", fetched_at=now, body="b", paragraph_count=2),
+        Article(id="a2", url="https://theargus.co.uk/x", outlet_domain="theargus.co.uk",
+                title="wire", fetched_at=now, body="b", paragraph_count=2),
+        Article(id="a3", url="https://salisburyjournal.co.uk/x", outlet_domain="salisburyjournal.co.uk",
+                title="wire", fetched_at=now, body="b", paragraph_count=2),
+    ]
+    syn = SyndicationGroup(article_ids=["a2", "a3"], similarity=0.95)
+    oc = [
+        OutletCoverage(outlet_domain="theguardian.com", article_id="a1",
+                       status=CoverageStatus.ASSERTED, source_quote="Guardian sentence.", position=1),
+        OutletCoverage(outlet_domain="theargus.co.uk", article_id="a2",
+                       status=CoverageStatus.ASSERTED, source_quote="Wire sentence.", position=1),
+        OutletCoverage(outlet_domain="salisburyjournal.co.uk", article_id="a3",
+                       status=CoverageStatus.ASSERTED, source_quote="Wire sentence.", position=1),
+    ]
+    claim = TieredClaim(canonical_text="X happened.", tier=ConsensusTier.MAJORITY, outlets=oc)
+    return CoverageMatrix(articles=arts, claims=[claim], syndication_groups=[syn])
+
+
+def test_matrix_collapses_syndicated_outlets_into_one_column():
+    html_doc = render_html(_syndication_matrix())
+    # The matrix head: 2 columns now, not 3 — the Newsquest pair collapses.
+    matrix_head_html = html_doc.split('matrix-head" style=')[1].split("</div></div>")[0]
+    assert matrix_head_html.count("outlet-col") == 2
+    # The rep column shows the +N badge.
+    assert "+1" in html_doc
+    # Citation block names the other syndicated outlet.
+    assert "Also asserted by" in html_doc
+    assert "salisburyjournal.co.uk" in html_doc
+
+
+def test_matrix_unchanged_when_no_syndication():
+    """A matrix with no syndication groups renders one column per outlet, as before."""
+    html_doc = render_html(_multi_outlet_matrix(["nytimes.com", "wsj.com", "theguardian.com"]))
+    matrix_head_html = html_doc.split('matrix-head" style=')[1].split("</div></div>")[0]
+    assert matrix_head_html.count("outlet-col") == 3
+    assert "+1" not in matrix_head_html  # no syndication badge
+
+
+def test_matrix_shows_internal_divergence_within_syndication_group():
+    """If one Newsquest paper contradicts the wire, the cell flags it."""
+    from news_lens.models import SyndicationGroup
+
+    now = datetime(2026, 5, 28, tzinfo=timezone.utc)
+    arts = [
+        Article(id="a1", url="https://a.example/x", outlet_domain="a.example",
+                title="t", fetched_at=now, body="b", paragraph_count=2),
+        Article(id="a2", url="https://b.example/x", outlet_domain="b.example",
+                title="t", fetched_at=now, body="b", paragraph_count=2),
+    ]
+    syn = SyndicationGroup(article_ids=["a1", "a2"], similarity=0.92)
+    oc = [
+        OutletCoverage(outlet_domain="a.example", article_id="a1",
+                       status=CoverageStatus.ASSERTED,
+                       source_quote="Q.", position=1),
+        OutletCoverage(outlet_domain="b.example", article_id="a2",
+                       status=CoverageStatus.CONTRADICTED,
+                       source_quote="Not Q.", position=1),
+    ]
+    claim = TieredClaim(canonical_text="X.", tier=ConsensusTier.DISPUTED, outlets=oc)
+    matrix = CoverageMatrix(articles=arts, claims=[claim], syndication_groups=[syn])
+    html_doc = render_html(matrix)
+    # The cell carries the mixed-syndication outline class.
+    assert "mixed-syndication" in html_doc
+    # The citation block names the diverging member explicitly.
+    assert "diverges" in html_doc
