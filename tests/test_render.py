@@ -380,7 +380,7 @@ def test_voices_section_normalizes_and_aggregates():
     # 5 distinct sources total — Starmer, Streeting, Burnham, Nowak, Treasury source.
     assert "<strong>5</strong> distinct named sources" in html_doc
     # 3 quoted by majority (Starmer, Streeting, Burnham at 2 of 3 each)
-    assert "<strong>3</strong> quoted by a majority of outlets" in html_doc
+    assert "<strong>3</strong> quoted by a majority" in html_doc
     assert "<strong>2</strong> quoted by only one" in html_doc
 
 
@@ -547,3 +547,85 @@ def test_omissions_section_shows_sample_caveat_only():
     assert "Sample too narrow" in html_doc
     # No omission cards, just the caveat.
     assert 'class="omission-card"' not in html_doc
+
+
+def test_normalize_source_name_collapses_honorifics():
+    """Variants with the same full name and varying honorifics share one key.
+
+    Surname-only references ("Mr Starmer") can't be merged with full-name
+    references ("Keir Starmer") without a name dictionary — that case
+    remains a separate key by design.
+    """
+    from news_lens.render import _normalize_source_name
+
+    full_name_cases = [
+        "Keir Starmer", "Sir Keir Starmer", "PM Keir Starmer",
+        "Prime Minister Keir Starmer", "Mr. Keir Starmer",
+    ]
+    keys = {_normalize_source_name(c) for c in full_name_cases}
+    assert keys == {"keir starmer"}, f"Expected one key, got {keys}"
+
+
+def test_normalize_source_name_strips_party_suffix():
+    from news_lens.render import _normalize_source_name
+
+    k1 = _normalize_source_name("Jeremy Corbyn, Labour")
+    k2 = _normalize_source_name("Jeremy Corbyn")
+    assert k1 == k2
+
+
+def test_voices_section_uses_lens_outlets_as_denominator():
+    """Sources are scored against outlets WITH lens data, not all outlets."""
+    # 4 articles, but only 2 lenses. A source quoted by both lenses
+    # should hit majority (2 of 2), not 50% of 4.
+    now = datetime(2026, 5, 28, tzinfo=timezone.utc)
+    arts = [
+        Article(id=f"a{i}", url=f"https://o{i}.example/x",
+                outlet_domain=f"o{i}.example", title="t",
+                fetched_at=now, body="b", paragraph_count=2)
+        for i in range(4)
+    ]
+
+    def _ls(aid, dom, srcs):
+        return ArticleLens(article_id=aid, outlet_domain=dom,
+            signals=LensSignals(
+                headline_framing=HeadlineFraming.NEUTRAL,
+                loaded_terms=[], sources_quoted=srcs, stance_summary="s",
+            ))
+
+    lenses = [
+        _ls("a0", "o0.example", ["President Smith"]),
+        _ls("a1", "o1.example", ["President Smith"]),
+    ]
+    matrix = CoverageMatrix(articles=arts, claims=[], lenses=lenses)
+    html_doc = render_html(matrix)
+    # Denominator is 2 (lens outlets), not 4 (sample outlets).
+    assert "2</strong> outlets with lens data" in html_doc
+    # The one source is quoted by both lens outlets -> majority.
+    assert "<strong>1</strong> quoted by a majority" in html_doc
+
+
+def test_voices_section_shows_absent_source_classes_from_omissions():
+    """Source-class omissions appear as a closing list under voices."""
+    from news_lens.models import (
+        OmissionAnalysis, OmissionCategory, StructuralOmission,
+    )
+    matrix = _lensed_matrix()
+    matrix.omissions = OmissionAnalysis(omissions=[
+        StructuralOmission(
+            category=OmissionCategory.SOURCE_CLASS,
+            description="No backbench Labour MP critical of the leadership quoted.",
+            why_relevant="The rebellion is the story; the rebels are the sources.",
+        ),
+        StructuralOmission(
+            category=OmissionCategory.PERSPECTIVE,
+            description="No grassroots Labour member surveyed.",
+            why_relevant="The membership shift is the policy proxy.",
+        ),
+    ])
+    html_doc = render_html(matrix)
+    # Only the SOURCE_CLASS omission appears in voices; the PERSPECTIVE
+    # one is handled by the Structural Omissions section.
+    assert "Source classes quoted by no outlet" in html_doc
+    assert "backbench Labour MP" in html_doc
+    assert "grassroots Labour member" not in html_doc.split("voices-absent")[1].split("</section>")[0]

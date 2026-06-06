@@ -622,9 +622,33 @@ a:focus-visible {
   flex-shrink: 0;
   min-width: 8px;
 }
-.voice-row.majority .voice-bar { background: #4ea16a; }
+.voice-row.majority .voice-bar { background: #2e7d32; }
+.voice-row.widely .voice-bar { background: #4ea16a; }
 .voice-row.minority .voice-bar { background: #d1a45b; }
 .voice-row.single .voice-bar { background: #b3786b; }
+
+.voices-absent {
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.voices-absent h3 {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}
+.voices-absent ul {
+  margin: 0;
+  padding-left: 20px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.voices-absent li { margin: 2px 0; }
 .voice-count {
   font-size: 11px;
   color: var(--text-muted);
@@ -2349,17 +2373,52 @@ _VOICES_INTRO = (
 )
 
 
-def _normalize_source_name(name: str) -> str:
-    """Lowercase + collapse punctuation/whitespace for grouping near-duplicates.
+# Honorifics, titles, and role prefixes that the lens models frequently
+# prepend to the same person's name. Stripped only when computing the
+# grouping key — the original spelling is kept for display so the
+# reader sees "Sir Keir Starmer" if the article wrote it that way.
+_NAME_PREFIX_STRIP = re.compile(
+    r"^(?:"
+    r"mr\.?|mrs\.?|ms\.?|mx\.?|miss|"
+    r"dr\.?|prof\.?|professor|"
+    r"sir|dame|lord|lady|"
+    r"pm|prime\s+minister|president|vice\s+president|vp|"
+    r"sen\.?|senator|rep\.?|representative|"
+    r"sec\.?|secretary|chief|commander|"
+    r"father|fr\.?|reverend|rev\.?|"
+    r"justice|judge|chancellor|"
+    r"former\s+(?:pm|prime\s+minister|president|secretary|chief|senator)"
+    r")\s+",
+    re.IGNORECASE,
+)
 
-    The lens prompt asks the model to name sources, but the same person
-    can come back as \"Keir Starmer\", \"Sir Keir Starmer\", \"PM Keir
-    Starmer\", or \"Starmer\". Even simple lowercasing collapses many of
-    those into one another for aggregation purposes; we keep the
-    longest original spelling as the display label so the reader sees a
-    full name rather than the shortest reference.
+# Trailing role / party affiliations the lens models append. Stripped
+# only for the grouping key.
+_NAME_SUFFIX_STRIP = re.compile(
+    r"\s*(?:,|\()\s*"
+    r"(?:mp|md|phd|esq\.?|jr\.?|sr\.?|"
+    r"r-[a-z]{2}|d-[a-z]{2}|i-[a-z]{2}|"
+    r"labour|labor|tory|conservative|conservatives|liberal|democrat|democrats|"
+    r"republican|republicans|independent|green|reform|snp|"
+    r"party|spokesperson)"
+    r"(?:\)|.*)$",
+    re.IGNORECASE,
+)
+
+
+def _normalize_source_name(name: str) -> str:
+    """Compute a grouping key that collapses honorific / title variants.
+
+    "Sir Keir Starmer", "PM Keir Starmer", "Mr Starmer" all collapse to
+    "starmer"-prefixed keys that aggregate together. The display label
+    on each voice row still uses the longest original spelling so the
+    reader sees a full, properly-titled name rather than the shortest
+    reference. The key is only used for grouping.
     """
-    return " ".join(name.lower().split())
+    s = " ".join(name.split()).lower()
+    s = _NAME_PREFIX_STRIP.sub("", s)
+    s = _NAME_SUFFIX_STRIP.sub("", s)
+    return s.strip()
 
 
 def _render_voices_section(matrix: CoverageMatrix, outlet_order: list[str]) -> str:
@@ -2386,42 +2445,79 @@ def _render_voices_section(matrix: CoverageMatrix, outlet_order: list[str]) -> s
     if not voices:
         return ""
 
-    n_outlets = len(outlet_order)
+    # The denominator that matters here is "outlets that returned lens
+    # data" rather than every outlet in the sample. A run with 16
+    # outlets but only 12 lens results would otherwise show 8/16 = 50%
+    # as "below majority" for a source quoted by every outlet that
+    # actually had lens data.
+    lens_outlets = {l.outlet_domain for l in matrix.lenses}
+    n_lens_outlets = len(lens_outlets) or 1
     rows = sorted(
         voices.values(),
         key=lambda v: (-len(v["outlets"]), v["display"].lower()),
     )
 
-    # Headline metric: how many sources reached >half the outlets vs only one.
-    n_majority = sum(1 for r in rows if len(r["outlets"]) > n_outlets / 2)
+    n_majority = sum(1 for r in rows if len(r["outlets"]) > n_lens_outlets / 2)
+    n_widely = sum(
+        1 for r in rows
+        if n_lens_outlets / 3 <= len(r["outlets"]) <= n_lens_outlets / 2
+    )
     n_single = sum(1 for r in rows if len(r["outlets"]) == 1)
     stats_html = (
         f"<div class=\"voices-stats\"><strong>{len(rows)}</strong> distinct "
-        f"named sources · <strong>{n_majority}</strong> quoted by a majority "
-        f"of outlets · <strong>{n_single}</strong> quoted by only one</div>"
+        f"named sources across <strong>{n_lens_outlets}</strong> outlet"
+        f"{'' if n_lens_outlets == 1 else 's'} with lens data · "
+        f"<strong>{n_majority}</strong> quoted by a majority · "
+        f"<strong>{n_widely}</strong> widely cited (a third to half) · "
+        f"<strong>{n_single}</strong> quoted by only one</div>"
     )
 
     row_parts = []
     for entry in rows:
         n = len(entry["outlets"])
-        pct = n / n_outlets if n_outlets else 0
+        pct = n / n_lens_outlets if n_lens_outlets else 0
         outlets_html = ", ".join(
             _esc(_outlet_display_name(d))
             for d in outlet_order if d in entry["outlets"]
         )
-        share_class = "majority" if n > n_outlets / 2 else (
-            "single" if n == 1 else "minority"
-        )
+        if n > n_lens_outlets / 2:
+            share_class = "majority"
+        elif n >= max(2, n_lens_outlets / 3):
+            share_class = "widely"
+        elif n == 1:
+            share_class = "single"
+        else:
+            share_class = "minority"
         row_parts.append(
             f"<div class=\"voice-row {share_class}\">"
             f"<div class=\"voice-name\">{_esc(entry['display'])}</div>"
             f"<div class=\"voice-share\">"
             f"<div class=\"voice-bar\" style=\"width: {max(pct * 100, 6):.0f}%\"></div>"
-            f"<span class=\"voice-count\">{n} of {n_outlets}</span>"
+            f"<span class=\"voice-count\">{n} of {n_lens_outlets}</span>"
             f"</div>"
             f"<div class=\"voice-outlets\">{outlets_html}</div>"
             f"</div>"
         )
+
+    # Close the section by naming the absences, when the omissions pass
+    # flagged any source-class items. Voices shows who WAS quoted; this
+    # short closer names who wasn't.
+    absent_html = ""
+    if matrix.omissions:
+        absent_items = [
+            om for om in matrix.omissions.omissions
+            if om.category == OmissionCategory.SOURCE_CLASS
+        ]
+        if absent_items:
+            li = "".join(
+                f"<li>{_esc(om.description)}</li>" for om in absent_items
+            )
+            absent_html = (
+                '<div class="voices-absent">'
+                "<h3>Source classes quoted by no outlet in this sample</h3>"
+                f"<ul>{li}</ul>"
+                "</div>"
+            )
 
     return (
         '<section id="voices" class="voices">'
@@ -2429,6 +2525,7 @@ def _render_voices_section(matrix: CoverageMatrix, outlet_order: list[str]) -> s
         f"<p class=\"section-note\">{_VOICES_INTRO}</p>"
         f"{stats_html}"
         f"<div class=\"voices-list\">{''.join(row_parts)}</div>"
+        f"{absent_html}"
         "</section>"
     )
 
