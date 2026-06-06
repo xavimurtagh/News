@@ -20,7 +20,7 @@ import html
 import re
 from collections import Counter, defaultdict
 from datetime import datetime
-from typing import Iterable
+from typing import Iterable, Optional
 
 from .models import (
     Article,
@@ -2782,7 +2782,38 @@ def _render_omissions_section(matrix: CoverageMatrix) -> str:
     )
 
 
-def render_html(matrix: CoverageMatrix) -> str:
+def _topline_first_bullet_text(matrix: CoverageMatrix) -> str:
+    """Strip-tags excerpt from the first topline bullet for OG/Twitter description."""
+    topline_html = _render_topline(matrix)
+    if not topline_html:
+        return "Cross-outlet coverage comparison."
+    inner = topline_html.split("<li>", 1)[-1].split("</li>", 1)[0]
+    text = re.sub(r"<[^>]+>", " ", inner)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:200]
+
+
+def _build_og_tags(matrix: CoverageMatrix, story_label: Optional[str] = None) -> str:
+    """OpenGraph / Twitter card meta tags so links preview cleanly when shared.
+
+    Title falls back to "News Lens coverage matrix" when no story label
+    is supplied (the matrix doesn't know its own subject — that's
+    something the operator declares at render time).
+    """
+    title = story_label or "News Lens coverage matrix"
+    description = _topline_first_bullet_text(matrix)
+    return (
+        f'<meta property="og:title" content="{_esc(title)}">'
+        f'<meta property="og:description" content="{_esc(description)}">'
+        '<meta property="og:type" content="article">'
+        '<meta name="twitter:card" content="summary_large_image">'
+        f'<meta name="twitter:title" content="{_esc(title)}">'
+        f'<meta name="twitter:description" content="{_esc(description)}">'
+        f'<meta name="description" content="{_esc(description)}">'
+    )
+
+
+def render_html(matrix: CoverageMatrix, story_label: Optional[str] = None) -> str:
     outlet_order = _outlet_order(matrix.articles)
     n_articles = len(matrix.articles)
     n_outlets = len(outlet_order)
@@ -2856,13 +2887,19 @@ def render_html(matrix: CoverageMatrix) -> str:
         "</footer>"
     )
 
+    page_title = (
+        f"{story_label} — News Lens"
+        if story_label
+        else "News Lens — Coverage Matrix"
+    )
     return (
         "<!DOCTYPE html>"
         '<html lang="en">'
         "<head>"
         '<meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        "<title>News Lens — Coverage Matrix</title>"
+        f"<title>{_esc(page_title)}</title>"
+        f"{_build_og_tags(matrix, story_label)}"
         f"<style>{_CSS}</style>"
         "</head>"
         '<body><div class="page">'

@@ -206,6 +206,15 @@ def main() -> int:
         help="Path to write a self-contained HTML coverage matrix.",
     )
     parser.add_argument(
+        "--label",
+        type=str,
+        default=None,
+        help="Short story label used as the page title and OG/Twitter "
+        "preview title when the report is shared. e.g. "
+        '--label "Wes Streeting resignation, May 2026". '
+        "Without a label the report uses a generic title.",
+    )
+    parser.add_argument(
         "--backend",
         choices=["claude", "openai-compatible"],
         default="claude",
@@ -425,7 +434,9 @@ def main() -> int:
         print(output_json)
 
     if args.html:
-        args.html.write_text(render_html(matrix), encoding="utf-8")
+        args.html.write_text(
+            render_html(matrix, story_label=args.label), encoding="utf-8"
+        )
         print(f"Wrote HTML report to {args.html}", file=sys.stderr)
 
     return 0
