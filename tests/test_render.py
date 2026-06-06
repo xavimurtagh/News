@@ -446,7 +446,7 @@ def _syndication_matrix() -> CoverageMatrix:
 def test_matrix_collapses_syndicated_outlets_into_one_column():
     html_doc = render_html(_syndication_matrix())
     # The matrix head: 2 columns now, not 3 — the Newsquest pair collapses.
-    matrix_head_html = html_doc.split('matrix-head" style=')[1].split("</div></div>")[0]
+    matrix_head_html = html_doc.split('class="matrix-head"')[1].split("</div></div>")[0]
     assert matrix_head_html.count("outlet-col") == 2
     # The rep column shows the +N badge.
     assert "+1" in html_doc
@@ -458,7 +458,7 @@ def test_matrix_collapses_syndicated_outlets_into_one_column():
 def test_matrix_unchanged_when_no_syndication():
     """A matrix with no syndication groups renders one column per outlet, as before."""
     html_doc = render_html(_multi_outlet_matrix(["nytimes.com", "wsj.com", "theguardian.com"]))
-    matrix_head_html = html_doc.split('matrix-head" style=')[1].split("</div></div>")[0]
+    matrix_head_html = html_doc.split('class="matrix-head"')[1].split("</div></div>")[0]
     assert matrix_head_html.count("outlet-col") == 3
     assert "+1" not in matrix_head_html  # no syndication badge
 

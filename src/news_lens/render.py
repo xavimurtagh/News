@@ -426,6 +426,21 @@ section h2 {
 html { scroll-behavior: smooth; }
 :target { scroll-margin-top: 14px; }
 
+/* Keyboard accessibility: every interactive control shows a visible focus
+   ring when reached with the keyboard. The browser's default is removed
+   on <details><summary> in many engines, so we put it back. */
+details > summary:focus-visible,
+.toc a:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
 .ownership-stats {
   font-size: 13px;
   color: var(--text);
@@ -466,7 +481,7 @@ html { scroll-behavior: smooth; }
   padding: 1px 7px;
   border-radius: 10px;
   background: #fef3c7;
-  color: #92400e;
+  color: #7c2d12;
   text-transform: uppercase;
 }
 .owner-outlets {
@@ -688,9 +703,9 @@ html { scroll-behavior: smooth; }
   vertical-align: middle;
 }
 .article-framing-badge[data-framing="positive"] { background: #2563eb; }
-.article-framing-badge[data-framing="neutral"] { background: #6b7280; }
+.article-framing-badge[data-framing="neutral"] { background: #4b5563; }
 .article-framing-badge[data-framing="negative"] { background: #c0392b; }
-.article-framing-badge[data-framing="mixed"] { background: #7c3aed; }
+.article-framing-badge[data-framing="mixed"] { background: #6d28d9; }
 .article .syndication-badge {
   display: inline-block;
   margin-top: 4px;
@@ -840,8 +855,8 @@ details.claim .claim-head {
   white-space: nowrap;
   cursor: help;
 }
-.grounding-chip.single_origin { background: #fef3c7; color: #92400e; }
-.grounding-chip.thinly_sourced { background: #fde2e1; color: #b3261e; }
+.grounding-chip.single_origin { background: #fef3c7; color: #7c2d12; }
+.grounding-chip.thinly_sourced { background: #fde2e1; color: #991f15; }
 
 .cell {
   display: inline-flex;
@@ -898,9 +913,9 @@ details.claim .claim-head {
   color: #fff;
 }
 .citation[data-framing="positive"] .framing-pill { background: #2563eb; }
-.citation[data-framing="neutral"] .framing-pill { background: #6b7280; }
+.citation[data-framing="neutral"] .framing-pill { background: #4b5563; }
 .citation[data-framing="negative"] .framing-pill { background: #c0392b; }
-.citation[data-framing="mixed"] .framing-pill { background: #7c3aed; }
+.citation[data-framing="mixed"] .framing-pill { background: #6d28d9; }
 .citation blockquote mark {
   background: #fef3c7;
   color: #92400e;
@@ -930,9 +945,9 @@ details.claim .claim-head {
 }
 .prov-pill.primary { background: #e6f4ea; color: #1e6b32; }
 .prov-pill.named { background: #e0ecfb; color: #1f3a5f; }
-.prov-pill.anonymous { background: #fef3c7; color: #92400e; }
-.prov-pill.media { background: #ededea; color: #6b6b66; }
-.prov-pill.uncited { background: #fde2e1; color: #b3261e; }
+.prov-pill.anonymous { background: #fef3c7; color: #7c2d12; }
+.prov-pill.media { background: #e6e6e2; color: #404040; }
+.prov-pill.uncited { background: #fde2e1; color: #991f15; }
 .citation blockquote {
   margin: 0;
   font-family: Georgia, "Times New Roman", serif;
@@ -1118,9 +1133,9 @@ footer.site {
   color: #fff;
 }
 .lens-card[data-framing="positive"] .framing-badge { background: #2563eb; }
-.lens-card[data-framing="neutral"] .framing-badge { background: #6b7280; }
+.lens-card[data-framing="neutral"] .framing-badge { background: #4b5563; }
 .lens-card[data-framing="negative"] .framing-badge { background: #c0392b; }
-.lens-card[data-framing="mixed"] .framing-badge { background: #7c3aed; }
+.lens-card[data-framing="mixed"] .framing-badge { background: #6d28d9; }
 
 .lens-card .stance {
   font-family: Georgia, "Times New Roman", serif;
@@ -1307,6 +1322,57 @@ footer.site {
   .sources-quoted .source { background: #2a2a26; }
 
   .summary-tier li::before { color: var(--text-subtle); }
+
+  /* Sample banner, TOC, ownership banner, omissions caveat: light-mode
+     used very pale backgrounds that turn near-white in dark mode and
+     fight the dark page. Re-skin them. */
+  .sample-banner {
+    background: #232320;
+    border-color: #4d4d47;
+    border-left-color: var(--accent);
+  }
+  .toc { background: var(--surface); border-color: var(--border); }
+  .toc a { color: var(--accent); }
+  .omissions-caveat {
+    background: #232320;
+    border-color: #4d4d47;
+  }
+  .omission-card { background: var(--surface); }
+  .section-note { color: var(--text-muted); }
+
+  /* Pills: the light-mode pairs (pale bg, mid-tone fg) become illegible
+     on a dark page. Each pill keeps the same hue family but flips to a
+     dark background with a high-contrast light foreground. */
+  .prov-pill.primary { background: #1d3a25; color: #4ade80; }
+  .prov-pill.named { background: #1c2e4d; color: #93c5fd; }
+  .prov-pill.anonymous { background: #3d2e0c; color: #fbbf24; }
+  .prov-pill.media { background: #2a2a26; color: #d1d1c9; }
+  .prov-pill.uncited { background: #3d1816; color: #fca5a5; }
+
+  .grounding-chip.single_origin { background: #3d2e0c; color: #fbbf24; }
+  .grounding-chip.thinly_sourced { background: #3d1816; color: #fca5a5; }
+
+  .owner-share { background: #3d2e0c; color: #fbbf24; }
+
+  .owner-outlets .outlet-funding {
+    background: #2a2a26;
+    color: var(--text-muted);
+  }
+  .owner-outlets .outlet-listed {
+    background: #1c2e4d;
+    color: #93c5fd;
+  }
+
+  .matrix-head .outlet-col.syndicated { color: var(--accent); }
+  .syndication-count { background: #1e1b4b; color: #c7d2fe; }
+
+  /* Voice bars use saturated mid-tones that read on either theme,
+     but the bar background on the un-filled bar needed a dark variant. */
+  .voice-bar { background: #2c3e5c; }
+
+  /* Mixed-syndication outline reads stronger with the brighter dark
+     contradict colour. */
+  .cell.mixed-syndication { outline-color: #f87171; }
 }
 """
 
@@ -1412,17 +1478,22 @@ def _render_matrix_head(
         if len(members) > 1:
             others = ", ".join(m for m in members if m != o)
             cols_parts.append(
-                f'<div class="outlet-col syndicated" '
+                f'<div class="outlet-col syndicated" role="columnheader" '
+                f'aria-label="{_esc(o)} (also carried verbatim by '
+                f'{_esc(others)})" '
                 f'title="Also carried verbatim by: {_esc(others)}">'
-                f"{_esc(o)} <span class=\"syndication-count\">+{len(members) - 1}</span>"
+                f"{_esc(o)} <span class=\"syndication-count\" aria-hidden=\"true\">+{len(members) - 1}</span>"
                 f"</div>"
             )
         else:
-            cols_parts.append(f'<div class="outlet-col">{_esc(o)}</div>')
+            cols_parts.append(
+                f'<div class="outlet-col" role="columnheader" '
+                f'aria-label="{_esc(o)}">{_esc(o)}</div>'
+            )
     cols = "".join(cols_parts)
     return (
-        f'<div class="matrix-head" style="{grid}">'
-        f'<div>Canonical claim</div>{cols}'
+        f'<div class="matrix-head" role="row" style="{grid}">'
+        f'<div role="columnheader">Canonical claim</div>{cols}'
         f"</div>"
     )
 
@@ -1438,11 +1509,15 @@ def _render_cells(
     for rep in outlet_order:
         entries = grouped.get(rep, [])
         if not entries:
-            cells.append('<span class="cell omitted">○</span>')
+            cells.append(
+                '<span class="cell omitted" role="gridcell" '
+                'aria-label="Omitted by {0}">○</span>'.format(_esc(rep))
+            )
             continue
         cov = _pick_rep_status(entries)
         glyph = _STATUS_GLYPH[cov.status]
         cls = cov.status.value
+        status_label = _STATUS_LABEL[cov.status]
         # When a syndication group contains both ASSERTED and
         # CONTRADICTED entries, mark the cell so the reader can see the
         # internal divergence (one outlet edited the wire to disagree).
@@ -1452,12 +1527,17 @@ def _render_cells(
             and CoverageStatus.CONTRADICTED in statuses
         ):
             cells.append(
-                f'<span class="cell {cls} mixed-syndication" '
+                f'<span class="cell {cls} mixed-syndication" role="gridcell" '
+                f'aria-label="{_esc(status_label)} by {_esc(rep)}; '
+                f'syndication group contains divergent statuses" '
                 f'title="Syndication group contains both contradicting and '
                 f'asserting outlets">{glyph}</span>'
             )
         else:
-            cells.append(f'<span class="cell {cls}">{glyph}</span>')
+            cells.append(
+                f'<span class="cell {cls}" role="gridcell" '
+                f'aria-label="{_esc(status_label)} by {_esc(rep)}">{glyph}</span>'
+            )
     return "".join(cells)
 
 
@@ -1690,7 +1770,8 @@ def _render_matrix(matrix: CoverageMatrix, outlet_order: list[str]) -> str:
                 )
             )
     return (
-        '<div class="matrix-frame">'
+        '<div class="matrix-frame" role="grid" '
+        'aria-label="Coverage matrix: outlets as columns, claims as rows">'
         f"{_render_matrix_head(reps, rep_members)}"
         f"{''.join(sections)}"
         "</div>"
