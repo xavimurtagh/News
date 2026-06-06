@@ -629,3 +629,48 @@ def test_voices_section_shows_absent_source_classes_from_omissions():
     assert "Source classes quoted by no outlet" in html_doc
     assert "backbench Labour MP" in html_doc
     assert "grassroots Labour member" not in html_doc.split("voices-absent")[1].split("</section>")[0]
+
+
+def test_topline_panel_renders_for_normal_matrix():
+    """The at-a-glance panel surfaces article count + tier counts + ownership."""
+    html_doc = render_html(_matrix())
+    assert 'class="topline"' in html_doc
+    assert "At a glance" in html_doc
+    # 2 articles → 2 outlets line.
+    assert '<strong>2</strong> article' in html_doc
+    # The synthetic _matrix has 1 universal claim.
+    assert '<strong>1</strong> claim' in html_doc
+    # The topline links to existing sections.
+    assert 'href="#articles"' in html_doc
+    assert 'href="#matrix"' in html_doc
+
+
+def test_topline_panel_surfaces_ownership_concentration():
+    """When 2+ outlets share an owner, the topline names them."""
+    matrix = _multi_outlet_matrix([
+        "wsj.com", "nypost.com", "thetimes.com",  # all News Corp
+        "theguardian.com",
+    ])
+    html_doc = render_html(matrix)
+    # News Corp concentration shows up in the topline.
+    topline = html_doc.split('class="topline"')[1].split("</section>")[0]
+    assert "News Corp" in topline
+    assert "3 of 4" in topline
+
+
+def test_topline_panel_links_to_omissions_section():
+    """An OmissionAnalysis surfaces an at-a-glance line."""
+    matrix = _omissions_matrix()
+    html_doc = render_html(matrix)
+    topline = html_doc.split('class="topline"')[1].split("</section>")[0]
+    assert 'href="#omissions"' in topline
+    assert "structural omission" in topline.lower()
+
+
+def test_topline_panel_empty_when_no_findings():
+    """A matrix with no articles produces no topline (degenerate case)."""
+    from datetime import datetime, timezone
+    empty = CoverageMatrix(articles=[], claims=[])
+    html_doc = render_html(empty)
+    # No bullets at all → no topline panel.
+    assert 'class="topline"' not in html_doc

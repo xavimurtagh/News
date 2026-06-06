@@ -394,6 +394,47 @@ section h2 {
   margin-top: 8px;
 }
 
+.topline {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 14px 18px;
+  margin-bottom: 18px;
+}
+.topline-head {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.topline ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.topline li {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.topline-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dotted var(--border-strong);
+}
+.topline-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.topline-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 .toc {
   display: flex;
   align-items: baseline;
@@ -2244,6 +2285,150 @@ def _render_table_of_contents(matrix: CoverageMatrix) -> str:
     )
 
 
+def _render_topline(matrix: CoverageMatrix) -> str:
+    """An auto-generated executive summary at the top of the report.
+
+    Reads what every later section already computes and surfaces 4–6
+    one-liners — the findings a first-time reader needs to know before
+    they invest scrolling time. Each bullet links to the section that
+    elaborates.
+    """
+    bullets: list[str] = []
+
+    # 1. Sample shape — outlets and independent voices.
+    n_articles = len(matrix.articles)
+    seen: set[str] = set()
+    domains: list[str] = []
+    for a in matrix.articles:
+        if a.outlet_domain not in seen:
+            seen.add(a.outlet_domain)
+            domains.append(a.outlet_domain)
+    n_outlets = len(domains)
+    n_voices = n_articles - sum(
+        len(g.article_ids) - 1 for g in matrix.syndication_groups
+    )
+    if not n_articles:
+        # Degenerate input — nothing to summarize.
+        return ""
+    if n_voices < n_articles:
+        bullets.append(
+            f'<a class="topline-link" href="#articles"><strong>{n_articles}</strong> '
+            f"articles across <strong>{n_outlets}</strong> outlet"
+            f"{'' if n_outlets == 1 else 's'} — only "
+            f"<strong>{n_voices}</strong> independent voice"
+            f"{'' if n_voices == 1 else 's'} once wire-syndicated copies "
+            "are collapsed.</a>"
+        )
+    else:
+        bullets.append(
+            f'<a class="topline-link" href="#articles"><strong>{n_articles}</strong> '
+            f"article{'' if n_articles == 1 else 's'} across "
+            f"<strong>{n_outlets}</strong> outlet"
+            f"{'' if n_outlets == 1 else 's'}.</a>"
+        )
+
+    # 2. Ownership concentration headline.
+    summary = _ownership_summary(domains)
+    largest = max(
+        (
+            g for k, g in summary["by_owner_key"].items()
+            if not k.startswith("__unknown__")
+        ),
+        key=lambda g: g["n"],
+        default=None,
+    )
+    if largest and largest["n"] >= 2 and n_outlets:
+        pct = largest["n"] / n_outlets
+        bullets.append(
+            f'<a class="topline-link" href="#ownership">'
+            f'<strong>{_esc(largest["label"])}</strong> is the most '
+            f"concentrated owner: {largest['n']} of {n_outlets} outlets "
+            f"({pct:.0%}).</a>"
+        )
+
+    # 3. Universal-but-unscrutinised claims.
+    n_universal = sum(
+        1 for c in matrix.claims if c.tier == ConsensusTier.UNIVERSAL
+    )
+    if n_universal:
+        bullets.append(
+            f'<a class="topline-link" href="#matrix">'
+            f"<strong>{n_universal}</strong> claim"
+            f"{'' if n_universal == 1 else 's'} asserted by every outlet and "
+            "challenged by none — the sample's shared assumptions, worth "
+            "the most scrutiny.</a>"
+        )
+
+    # 4. Disputed claims.
+    n_disputed = sum(
+        1 for c in matrix.claims if c.tier == ConsensusTier.DISPUTED
+    )
+    if n_disputed:
+        bullets.append(
+            f'<a class="topline-link" href="#matrix">'
+            f"<strong>{n_disputed}</strong> claim"
+            f"{'' if n_disputed == 1 else 's'} where outlets directly "
+            "contradict one another.</a>"
+        )
+
+    # 5. Thin / single-origin grounding.
+    n_thin = sum(
+        1 for c in matrix.claims if c.grounding == GroundingFlag.THINLY_SOURCED
+    )
+    n_single_origin = sum(
+        1 for c in matrix.claims if c.grounding == GroundingFlag.SINGLE_ORIGIN
+    )
+    if n_thin or n_single_origin:
+        parts = []
+        if n_thin:
+            parts.append(
+                f"<strong>{n_thin}</strong> thinly sourced "
+                "(no primary or named source anywhere)"
+            )
+        if n_single_origin:
+            parts.append(
+                f"<strong>{n_single_origin}</strong> single-origin "
+                "(multiple outlets, one source)"
+            )
+        bullets.append(
+            f'<a class="topline-link" href="#matrix">' + " · ".join(parts) + ".</a>"
+        )
+
+    # 6. Top omission category.
+    if matrix.omissions and matrix.omissions.omissions:
+        by_cat: dict[OmissionCategory, int] = {}
+        for om in matrix.omissions.omissions:
+            by_cat[om.category] = by_cat.get(om.category, 0) + 1
+        n_om = len(matrix.omissions.omissions)
+        top_cat, top_n = max(by_cat.items(), key=lambda kv: kv[1])
+        cat_label = _OMISSION_CATEGORY_LABEL.get(
+            top_cat, top_cat.value.replace("_", " ").title()
+        )
+        bullets.append(
+            f'<a class="topline-link" href="#omissions">'
+            f"<strong>{n_om}</strong> structural omission"
+            f"{'' if n_om == 1 else 's'} flagged, mostly "
+            f'<em>{_esc(cat_label.lower())}</em>.</a>'
+        )
+    elif matrix.omissions and matrix.omissions.sample_caveat:
+        bullets.append(
+            f'<a class="topline-link" href="#omissions">'
+            "Structural omissions analysis was skipped — the sample "
+            "couldn't support it.</a>"
+        )
+
+    if not bullets:
+        return ""
+
+    li = "".join(f"<li>{b}</li>" for b in bullets)
+    return (
+        '<section class="topline" aria-label="At-a-glance findings">'
+        '<div class="topline-head">At a glance</div>'
+        f"<ul>{li}</ul>"
+        "</section>"
+    )
+
+
 _OWNERSHIP_INTRO = (
     "Manufacturing Consent calls ownership the propaganda model's first "
     "filter and advertising the second — who owns a paper, and how it "
@@ -2634,6 +2819,7 @@ def render_html(matrix: CoverageMatrix) -> str:
         f' · {n_claims} canonical claim{"" if n_claims == 1 else "s"}'
         f" · generated {_esc(generated)}</div>"
         "</header>"
+        f"{_render_topline(matrix)}"
         f"{_render_sample_banner(matrix)}"
         f"{_render_table_of_contents(matrix)}"
         '<section id="articles">'
