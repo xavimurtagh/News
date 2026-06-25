@@ -338,6 +338,27 @@ class OmissionAnalysis(BaseModel):
     )
 
 
+class HeadlineDivergence(BaseModel):
+    """How much one article's headline diverges from the sample's centre.
+
+    Computed once per article when sentence-transformers is available:
+    embed every article title with the same MPNet model used for claim
+    alignment, average the vectors to get a centroid, score each article
+    by `1 - cosine(title, centroid)`. Higher score = the headline phrases
+    the story more unlike the rest of the sample — the outlet framing
+    the lead most idiosyncratically.
+    """
+
+    article_id: str
+    divergence_score: float = Field(
+        description=(
+            "1 minus the cosine similarity between the article title's "
+            "embedding and the centroid of all sample title embeddings. "
+            "Range 0..2; in practice 0..1. Higher = more divergent."
+        )
+    )
+
+
 class CoverageMatrix(BaseModel):
     """End-to-end pipeline output: articles, tiered claims, lens, syndication, omissions."""
 
@@ -346,3 +367,4 @@ class CoverageMatrix(BaseModel):
     lenses: List[ArticleLens] = Field(default_factory=list)
     syndication_groups: List[SyndicationGroup] = Field(default_factory=list)
     omissions: Optional[OmissionAnalysis] = None
+    headline_divergence: List[HeadlineDivergence] = Field(default_factory=list)

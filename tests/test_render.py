@@ -674,3 +674,46 @@ def test_topline_panel_empty_when_no_findings():
     html_doc = render_html(empty)
     # No bullets at all → no topline panel.
     assert 'class="topline"' not in html_doc
+
+
+def _divergence_matrix() -> CoverageMatrix:
+    from news_lens.models import HeadlineDivergence
+
+    now = datetime(2026, 5, 28, tzinfo=timezone.utc)
+    arts = [
+        Article(id="a1", url="https://outlier.example/x",
+                outlet_domain="outlier.example",
+                title="Off-the-wall framing", fetched_at=now,
+                body="b", paragraph_count=2),
+        Article(id="a2", url="https://centre.example/x",
+                outlet_domain="centre.example",
+                title="Standard news framing", fetched_at=now,
+                body="b", paragraph_count=2),
+    ]
+    divergences = [
+        HeadlineDivergence(article_id="a1", divergence_score=0.42),
+        HeadlineDivergence(article_id="a2", divergence_score=0.05),
+    ]
+    return CoverageMatrix(
+        articles=arts, claims=[], headline_divergence=divergences,
+    )
+
+
+def test_headline_divergence_section_renders_top_outliers():
+    html_doc = render_html(_divergence_matrix())
+    assert "Headline divergence" in html_doc
+    # Top divergent appears with its title.
+    assert "Off-the-wall framing" in html_doc
+    # Scores rendered to 2dp.
+    assert "0.42" in html_doc
+    assert "0.05" in html_doc
+    # TOC links to the section.
+    assert 'href="#headline-divergence"' in html_doc
+
+
+def test_headline_divergence_section_hidden_when_no_data():
+    """Matrix without divergence data renders no section."""
+    matrix = _multi_outlet_matrix(["nytimes.com", "wsj.com"])
+    html_doc = render_html(matrix)
+    assert "Headline divergence" not in html_doc
+    assert 'href="#headline-divergence"' not in html_doc

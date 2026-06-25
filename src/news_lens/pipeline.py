@@ -268,12 +268,28 @@ async def _run_async(
         n = len(omissions.omissions) if omissions else 0
         print(f"  -> {n} omission(s) flagged", file=sys.stderr)
 
+    # Reuses the embeddings model already loaded for alignment. Cheap
+    # (N embeddings, one centroid, N dot products) and silent when the
+    # optional dep isn't installed.
+    from . import headline_divergence as _hd
+    divergences = []
+    if _hd.is_available():
+        divergences = _hd.compute_headline_divergence(articles)
+        if divergences:
+            top = divergences[0]
+            print(
+                f"  -> headline divergence: top score "
+                f"{top.divergence_score:.3f}",
+                file=sys.stderr,
+            )
+
     return CoverageMatrix(
         articles=articles,
         claims=tiered,
         lenses=lenses,
         syndication_groups=syndication_groups,
         omissions=omissions,
+        headline_divergence=divergences,
     )
 
 

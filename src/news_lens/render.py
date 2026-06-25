@@ -690,6 +690,62 @@ a:focus-visible {
   color: var(--text);
 }
 .voices-absent li { margin: 2px 0; }
+
+.divergence-list {
+  display: grid;
+  gap: 10px;
+}
+.divergence-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 200px) 1fr;
+  gap: 16px;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+.divergence-bar-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.divergence-bar {
+  height: 10px;
+  border-radius: 5px;
+  background: #c0392b;
+  flex-shrink: 0;
+  min-width: 8px;
+}
+.divergence-score {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.divergence-meta {
+  display: grid;
+  gap: 2px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.divergence-meta a {
+  color: var(--text);
+  text-decoration: none;
+  font-family: Georgia, "Times New Roman", serif;
+}
+.divergence-meta a:hover { color: var(--accent); text-decoration: underline; }
+.divergence-outlet {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.divergence-domain {
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 720px) {
+  .divergence-row { grid-template-columns: 1fr; }
+}
 .voice-count {
   font-size: 11px;
   color: var(--text-muted);
@@ -2269,6 +2325,8 @@ def _render_table_of_contents(matrix: CoverageMatrix) -> str:
         matrix.omissions.omissions or matrix.omissions.sample_caveat
     ):
         items.append(("omissions", "Structural omissions"))
+    if matrix.headline_divergence:
+        items.append(("headline-divergence", "Headline divergence"))
     if matrix.lenses:
         items.append(("framing", "Per-Article Framing"))
     items.append(("profile", "Outlet Coverage Profile"))
@@ -2813,6 +2871,65 @@ def _build_og_tags(matrix: CoverageMatrix, story_label: Optional[str] = None) ->
     )
 
 
+_DIVERGENCE_INTRO = (
+    "Each article title is embedded with the same sentence-transformers "
+    "model the matrix uses, the mean of the sample is taken, and each "
+    "headline is scored by its cosine distance from that centre. "
+    "Headlines high in this list phrased the lead most unlike their "
+    "peers — sometimes a different angle, sometimes a different framing, "
+    "sometimes simply a different headline-writer's house style. Click "
+    "through to read the article and decide which."
+)
+
+
+def _render_headline_divergence_section(matrix: CoverageMatrix) -> str:
+    """Show the top headlines that frame the lead most unlike the sample mean."""
+    if not matrix.headline_divergence:
+        return ""
+
+    articles_by_id = {a.id: a for a in matrix.articles}
+    rows = []
+    # Show top 5; if the sample is small (n<5), show all.
+    n_show = min(5, len(matrix.headline_divergence))
+    top = matrix.headline_divergence[:n_show]
+    max_score = max(r.divergence_score for r in top) or 1.0
+
+    for d in top:
+        article = articles_by_id.get(d.article_id)
+        if article is None:
+            continue
+        outlet = article.outlet_domain
+        friendly = _outlet_display_name(outlet)
+        title = article.title or "(no title)"
+        score = d.divergence_score
+        # Bar width is the score relative to the most-divergent in the
+        # sample, so the row is a visual ranking not an absolute scale.
+        rel_width = max(score / max_score, 0.04) if max_score else 0.04
+        rows.append(
+            f'<div class="divergence-row">'
+            f'<div class="divergence-bar-cell">'
+            f'<div class="divergence-bar" style="width: {rel_width * 100:.0f}%"></div>'
+            f'<span class="divergence-score">{score:.2f}</span>'
+            f"</div>"
+            f'<div class="divergence-meta">'
+            f'<a href="{_esc(article.url)}" target="_blank" rel="noopener">'
+            f"<strong>{_esc(title)}</strong></a>"
+            f'<div class="divergence-outlet">{_esc(friendly)} '
+            f'<span class="divergence-domain">({_esc(outlet)})</span>'
+            f"</div>"
+            f"</div>"
+            f"</div>"
+        )
+
+    return (
+        '<section id="headline-divergence" class="divergence">'
+        "<h2>Headline divergence</h2>"
+        f'<p class="section-note">{_DIVERGENCE_INTRO}</p>'
+        f'<div class="divergence-list">{"".join(rows)}</div>'
+        "</section>"
+    )
+
+
 def render_html(matrix: CoverageMatrix, story_label: Optional[str] = None) -> str:
     outlet_order = _outlet_order(matrix.articles)
     n_articles = len(matrix.articles)
@@ -2822,6 +2939,7 @@ def render_html(matrix: CoverageMatrix, story_label: Optional[str] = None) -> st
 
     voices_section = _render_voices_section(matrix, outlet_order)
     omissions_section = _render_omissions_section(matrix)
+    divergence_section = _render_headline_divergence_section(matrix)
 
     framing_section = ""
     if matrix.lenses:
@@ -2876,6 +2994,7 @@ def render_html(matrix: CoverageMatrix, story_label: Optional[str] = None) -> st
         "</section>"
         f"{voices_section}"
         f"{omissions_section}"
+        f"{divergence_section}"
         f"{framing_section}"
         '<section id="profile">'
         "<h2>Outlet Coverage Profile</h2>"
