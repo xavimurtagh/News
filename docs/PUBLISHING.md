@@ -1,5 +1,27 @@
 # Publishing reports to the public web
 
+## Go-live checklist (everything else is detail)
+
+Three things only you can do — they require clicking buttons on
+`github.com`, so they can't be automated:
+
+1. **Merge this branch to `main`.** The publish workflow only runs from
+   `main` by default (see `on: push: branches:` in
+   `.github/workflows/publish.yml`).
+2. **Enable GitHub Pages.** Repo → `Settings` → `Pages`. Under "Source"
+   pick **"GitHub Actions"** (not "Deploy from a branch"). Save.
+3. **Push any commit that touches `docs/`** (the first merge to `main`
+   counts). The workflow runs, builds `docs/index.html` from the
+   placeholder reports folder, and deploys. Within ~30s the site is
+   live at `https://xavimurtagh.github.io/news/`. The first deploy
+   shows the hero copy and zero report cards — that's the bootstrap
+   state. Add reports per the section below.
+
+After that, every report you copy into `docs/reports/` and push goes
+public on the next workflow run.
+
+---
+
 This is the from-clean-checkout guide to putting a curated set of News
 Lens reports on the internet under your editorial control. The setup
 is intentionally minimal: everything is static HTML, hosted on GitHub
